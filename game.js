@@ -13,8 +13,10 @@
 
 
 // Build info for quick debugging
+window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_33_0_MOBILE_PHASE1",
+  build: "V49_33_1_MOBILE_STANDALONE_TOUCH",
+  edition: "mobile",
   storyModule: true,
   optimized: true
 };
@@ -1287,12 +1289,12 @@ function mobileButtonRects(){
   //    R / 切换     ATK / 普攻
   //          DODGE / 冲刺
   return {
-    attack:{x:W-158,y:H-145,r:58,label:language==="en"?"ATK":"普攻",key:"mouse1",kind:"main"},
-    dash:{x:W-96,y:H-56,r:42,label:language==="en"?"DODGE":"冲刺",key:"shift",kind:"dash"},
-    skill:{x:W-215,y:H-246,r:38,label:language==="en"?"SKILL":"技能",key:"e",kind:"skill"},
-    ult:{x:W-126,y:H-286,r:42,label:language==="en"?"ULT":"大招",key:"q",kind:"ult"},
-    swap:{x:W-280,y:H-150,r:36,label:language==="en"?"SWAP":"切换",key:"r",kind:"swap"},
-    parry:{x:W-350,y:H-72,r:34,label:language==="en"?"PARRY":"弹刀",key:" ",kind:"parry"},
+    attack:{x:W-168,y:H-128,r:68,label:language==="en"?"ATK":"普攻",key:"mouse1",kind:"main"},
+    dash:{x:W-70,y:H-48,r:43,label:language==="en"?"DODGE":"闪避",key:"shift",kind:"dash"},
+    skill:{x:W-246,y:H-236,r:42,label:language==="en"?"SKILL":"技能",key:"e",kind:"skill"},
+    ult:{x:W-125,y:H-274,r:46,label:language==="en"?"ULT":"大招",key:"q",kind:"ult"},
+    swap:{x:W-315,y:H-132,r:39,label:language==="en"?"SWAP":"切换",key:"r",kind:"swap"},
+    parry:{x:W-365,y:H-62,r:35,label:language==="en"?"PARRY":"弹刀",key:" ",kind:"parry"},
     menu:{x:W-52,y:52,r:31,label:"MENU",key:"escape",kind:"menu"}
   };
 }
@@ -1365,6 +1367,7 @@ function handleMobileTouchStart(e){
   e.preventDefault();unlockAudio();mobileInput.ignoreMouseUntil=performance.now()+800;
   for(const t of e.changedTouches){
     const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;
+    if(tryOpenMobileNativeKeyboardAt(p)){mobileInput.touchActions[t.identifier]="keyboard";continue;}
     if(shouldShowMobileControls()){
       if(p.x<390&&p.y>285&&mobileInput.joyId===null){
         mobileInput.joyId=t.identifier;mobileInput.joyBaseX=clamp(p.x,90,260);mobileInput.joyBaseY=clamp(p.y,390,H-95);mobileInput.joyX=p.x;mobileInput.joyY=p.y;mobileInput.touchActions[t.identifier]="joystick";continue;
@@ -1404,6 +1407,7 @@ function handleMobileTouchEnd(e){
     else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mouseDown=false;mouseAttackConsumed=false;}
     delete mobileInput.touchActions[t.identifier];
   }
+  if(gameMode==="nameInput"&&!mobileNativeKeyboardTarget)openMobileNativeKeyboard("name");
 }
 
 detectPZDevice();
@@ -2445,21 +2449,13 @@ async function legacyCloudRegisterAfterProfile(email, password){
   }finally{ cloudBusy = false; }
 }
 function legacyRequestCloudAccountAfterProfile(){
-  const regEmail = window.prompt(cloudTx("cloudPromptEmail"), cloudEmailInput || "");
-  if(regEmail === null){ cloudSetMsg(cloudTx("cloudNeedLogin"), 180); return; }
-  const regPass = window.prompt(cloudTx("cloudPromptPassword"), cloudPasswordInput || "");
-  if(regPass === null){ cloudSetMsg(cloudTx("cloudNeedLogin"), 180); return; }
-  cloudRegisterAfterProfile(String(regEmail).trim(), String(regPass));
+  accountEmail=cloudEmailInput||"";accountPassword="";openAccountCredentialPanel("register");
+  if(mobileInput.enabled)openMobileNativeKeyboard("email");
 }
 function legacyCloudPromptCredentials(){
-  const email = window.prompt(cloudTx("cloudPromptEmail"), cloudEmailInput || "");
-  if(email === null) return false;
-  const pass = window.prompt(cloudTx("cloudPromptPassword"), cloudPasswordInput || "");
-  if(pass === null) return false;
-  cloudEmailInput = String(email).trim();
-  cloudPasswordInput = String(pass);
-  if(!cloudEmailInput || !cloudPasswordInput){ cloudSetMsg(cloudTx("cloudEmailMissing")); return false; }
-  return true;
+  accountEmail=cloudEmailInput||"";accountPassword="";openAccountCredentialPanel("login");
+  if(mobileInput.enabled)openMobileNativeKeyboard("email");
+  return false;
 }
 async function legacyCloudRegister(){
   if(cloudBusy) return; if(!initCloudSave()) return; if(!cloudPromptCredentials()) return; cloudBusy=true;
@@ -3081,14 +3077,9 @@ function openAccountCredentialPanel(mode="login"){
 }
 
 function promptAccountCredentials(mode="login"){
-  const email = window.prompt(accTx("enterEmail"), accountEmail || "");
-  if(email === null) return false;
-  const password = window.prompt(accTx("enterPassword"), "");
-  if(password === null) return false;
-  accountEmail = String(email).trim();
-  accountPassword = String(password);
-  accountMode = mode;
-  return true;
+  openAccountCredentialPanel(mode);
+  if(mobileInput.enabled)openMobileNativeKeyboard("email");
+  return false;
 }
 
 async function bindCurrentLocalSaveToNewAccount(){
@@ -4643,6 +4634,8 @@ let playerUID = "";
 let nameInput = "";
 let nameError = "";
 let pzHiddenTextInput = null;
+let mobileNativeKeyboardInput = null;
+let mobileNativeKeyboardTarget = "";
 let teamRenamePreset = -1;
 let teamRenameDraft = "";
 let teamRenameReplaceOnType = false;
@@ -4651,6 +4644,60 @@ function isTypingTarget(el) {
   if (!el) return false;
   const tag = el.tagName ? el.tagName.toLowerCase() : "";
   return tag === "input" || tag === "textarea" || el.isContentEditable || !!el.closest?.("input, textarea, [contenteditable='true']");
+}
+
+function ensureMobileNativeKeyboardInput(){
+  if(mobileNativeKeyboardInput)return mobileNativeKeyboardInput;
+  const input=document.createElement("input");
+  input.id="pzMobileNativeKeyboard";input.autocapitalize="off";input.autocorrect="off";input.spellcheck=false;
+  input.setAttribute("aria-label","Project Zero Mobile native text input");
+  input.addEventListener("input",()=>{
+    if(mobileNativeKeyboardTarget==="name"){
+      const candidate=cleanPlayerName(input.value);if(checkWritableText(candidate).ok){nameInput=candidate;nameError="";}else input.value=nameInput;
+    }else if(mobileNativeKeyboardTarget==="email") accountEmail=String(input.value||"").replace(/\s/g,"").slice(0,96);
+    else if(mobileNativeKeyboardTarget==="password") accountPassword=String(input.value||"").slice(0,64);
+  });
+  input.addEventListener("keydown",e=>{
+    if(e.key!=="Enter")return;e.preventDefault();
+    if(mobileNativeKeyboardTarget==="name")confirmNameInput();
+    else if(mobileNativeKeyboardTarget==="email"){accountFocusedField="password";openMobileNativeKeyboard("password");}
+    else if(mobileNativeKeyboardTarget==="password"){if(accountMode==="register")accountRegisterFlow();else accountLoginFlow();}
+  });
+  input.addEventListener("blur",()=>{if(document.activeElement!==input)mobileNativeKeyboardTarget="";});
+  document.body.appendChild(input);mobileNativeKeyboardInput=input;return input;
+}
+
+function mobileKeyboardFieldRect(target){
+  if(target==="name")return{x:W/2-190,y:283,w:380,h:58};
+  const panelY=gameMode==="settings"&&accountCredentialPanelActive?132:165;
+  return target==="email"?{x:W/2-165,y:panelY+103,w:330,h:44}:{x:W/2-165,y:panelY+175,w:330,h:44};
+}
+
+function openMobileNativeKeyboard(target){
+  if(!mobileInput.enabled)return false;
+  const input=ensureMobileNativeKeyboardInput(),rect=mobileKeyboardFieldRect(target),canvasRect=canvas.getBoundingClientRect();
+  mobileNativeKeyboardTarget=target;
+  const codeMode=target==="password"&&accountMode==="register"&&accountRegisterStep==="code";
+  input.type=target==="password"&&!codeMode?"password":target==="email"?"email":"text";
+  input.inputMode=codeMode?"numeric":target==="email"?"email":"text";
+  input.enterKeyHint=target==="email"?"next":"done";
+  input.autocomplete=target==="email"?"email":target==="password"?"current-password":"off";
+  input.maxLength=target==="name"?12:target==="email"?96:codeMode?6:64;
+  input.value=target==="name"?nameInput:target==="email"?accountEmail:accountPassword;
+  input.style.left=(canvasRect.left+rect.x/W*canvasRect.width)+"px";input.style.top=(canvasRect.top+rect.y/H*canvasRect.height)+"px";
+  input.style.width=(rect.w/W*canvasRect.width)+"px";input.style.height=(rect.h/H*canvasRect.height)+"px";
+  try{input.focus({preventScroll:true});const n=input.value.length;input.setSelectionRange(n,n);}catch(_){input.focus();}
+  return true;
+}
+
+function tryOpenMobileNativeKeyboardAt(p){
+  if(!mobileInput.enabled)return false;
+  if(gameMode==="nameInput"&&pointInRect(p,mobileKeyboardFieldRect("name")))return openMobileNativeKeyboard("name");
+  const accountOpen=(gameMode==="login"&&(!cloudUser||guestMode))||(gameMode==="settings"&&accountCredentialPanelActive);
+  if(!accountOpen)return false;
+  if(pointInRect(p,mobileKeyboardFieldRect("email"))){accountFocusedField="email";accountMsg="";return openMobileNativeKeyboard("email");}
+  if(pointInRect(p,mobileKeyboardFieldRect("password"))){accountFocusedField="password";accountMsg="";return openMobileNativeKeyboard("password");}
+  return false;
 }
 
 function ensurePZHiddenTextInput() {
@@ -4716,6 +4763,9 @@ function ensurePZHiddenTextInput() {
 }
 
 function syncNameInputFocus() {
+  // Mobile uses a separate native-keyboard bridge. Do not let the legacy
+  // desktop hidden input steal focus one frame after the user's touch.
+  if(mobileInput.enabled&&mobileNativeKeyboardTarget==="name"&&document.activeElement===mobileNativeKeyboardInput)return;
   const input = ensurePZHiddenTextInput();
   const editingTeamName = gameMode === "team" && teamRenamePreset >= 0;
   const editingSignature=gameMode==="profile"&&profileSignatureEditing;
@@ -19925,11 +19975,12 @@ function drawMobileControls(){
   ctx.fillStyle="rgba(5,10,20,.38)";ctx.beginPath();ctx.arc(bx,by,76,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(124,199,255,.42)";ctx.lineWidth=3;ctx.stroke();
   const kx=mobileInput.joyId===null?bx:mobileInput.joyX,ky=mobileInput.joyId===null?by:mobileInput.joyY;
   ctx.fillStyle="rgba(124,199,255,.34)";ctx.beginPath();ctx.arc(kx,ky,32,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#9de5ff";ctx.lineWidth=2;ctx.stroke();
+  const mobileColors={main:"#e6ad2f",skill:"#b75cff",ult:"#ff5965",swap:"#b8beca",dash:"#62bfff",parry:"#7cc7ff"};
   for(const [name,b] of Object.entries(buttons)){
     if(name==="menu")continue;
     const active=!!mobileInput.activeButtons[name];
     const disabled=name==="skill"?player.skillCd>0||player.energy<SKILL_ENERGY_COST:name==="ult"?player.ultCd>0||player.ult<ULT_MAX:name==="dash"?player.dashCd>0:false;
-    ctx.globalAlpha=disabled?.42:1;ctx.fillStyle=active?"rgba(255,224,102,.48)":"rgba(8,14,26,.72)";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=active?"#ffe066":disabled?"rgba(255,255,255,.24)":"#7cc7ff";ctx.lineWidth=active?4:2;ctx.stroke();ctx.fillStyle=disabled?"#8993a3":"#fff";ctx.font="bold "+(name==="attack"?17:12)+"px "+FONT_UI;ctx.fillText(b.label,b.x,b.y+(disabled?5:0));
+    const color=mobileColors[b.kind]||mobileColors[name]||"#7cc7ff";ctx.globalAlpha=disabled?.42:1;ctx.fillStyle=active?color:"rgba(8,14,26,.72)";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=active?"#fff":disabled?"rgba(255,255,255,.24)":color;ctx.lineWidth=active?5:3;ctx.stroke();ctx.fillStyle=disabled?"#8993a3":"#fff";ctx.font="bold "+(name==="attack"?18:12)+"px "+FONT_UI;ctx.fillText(b.label,b.x,b.y+(disabled?5:0));
     if(disabled){const cd=name==="skill"?player.skillCd:name==="ult"?player.ultCd:player.dashCd;ctx.font="bold 10px Arial";ctx.fillText(cd>0?(cd/60).toFixed(1)+"s":"—",b.x,b.y-13);}ctx.globalAlpha=1;
   }
   ctx.fillStyle="rgba(124,199,255,.72)";ctx.font="bold 10px "+FONT_UI;ctx.fillText(mobileInput.device.toUpperCase()+" TOUCH",W/2,H-18);ctx.restore();

@@ -1,11 +1,16 @@
 {
-  "version": "49.33.0",
-  "build": "2026091101-mobile-phase1-playable",
+  "version": "49.33.1",
+  "build": "2026091102-mobile-standalone-native-input",
+  "edition": "mobile",
   "publishedAt": "2026-08-29T12:00:00Z",
   "mandatory": false,
   "minimumLauncherVersion": "1.0.0",
   "saveSchemaVersion": 80,
   "changelog": [
+    "建立完全独立的 Project Zero Mobile 工程，后续移动端修改不再写入 PC 工程",
+    "角色名、邮箱、密码与验证码输入改为聚焦系统输入控件，触摸输入框即可呼出手机或iPad原生软键盘",
+    "Mobile 版移除浏览器 prompt 凭据弹窗，邮箱使用邮件键盘、验证码使用数字键盘、密码使用系统密码键盘",
+    "虚拟按键参考老版布局重排：右下大普攻、上方技能与大招、内侧切换、右下闪避、左下动态摇杆",
     "Mobile 第一阶段原型：自动区分手机、平板与PC，PC继续使用原键鼠输入与现有完整UI",
     "手机和平板启用独立紧凑战斗HUD、左侧动态虚拟摇杆及右侧拇指战斗按钮布局",
     "新增真正的多点触控归属，可在持续移动时同时普攻、释放技能、大招、闪避、弹刀或切换角色",

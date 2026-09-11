@@ -2,8 +2,8 @@
   "use strict";
 
   const VERSION_URL="version.json";
-  const LOCAL_VERSION="49.33.0";
-  const LOCAL_BUILD="2026091101-mobile-phase1-playable";
+  const LOCAL_VERSION="49.33.1";
+  const LOCAL_BUILD="2026091102-mobile-standalone-native-input";
   const FILE_RUNTIME=location.protocol==="file:";
   const BUILD_KEY="pz_runtime_build";
   const VERSION_KEY="pz_runtime_version";

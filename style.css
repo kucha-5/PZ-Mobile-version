@@ -167,3 +167,17 @@ html, body {
 /* PZ Custom Cursor */
 #game{cursor:none;}
 html[data-pz-device="mobile"] #game,html[data-pz-device="tablet"] #game{cursor:default;}
+
+#pzMobileNativeKeyboard{
+  position:fixed;
+  z-index:3000;
+  box-sizing:border-box;
+  opacity:.015;
+  color:transparent;
+  background:transparent;
+  border:0;
+  outline:0;
+  caret-color:transparent;
+  font-size:16px;
+  pointer-events:none;
+}
