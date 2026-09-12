@@ -1,5 +1,0 @@
-Project Zero Mobile V49.34.0
-Build: 2026091103-mobile-special-touch-ui
-
-This directory is the independent touch-first Mobile edition.
-The PC/Web source tree is not modified by Mobile-specific development.

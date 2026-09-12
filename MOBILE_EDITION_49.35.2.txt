@@ -1,4 +1,0 @@
-Project Zero Mobile V49.35.2
-Build: 2026091201-mobile-operator-coop-exit-fix
-
-Independent touch-first Mobile edition. PC/Web source is not modified.

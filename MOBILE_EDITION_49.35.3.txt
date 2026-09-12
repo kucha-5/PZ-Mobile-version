@@ -1,4 +1,0 @@
-Project Zero Mobile V49.35.3
-Build: 2026091202-mobile-touch-parity-fix
-
-Independent Mobile edition. PC/Web source is not modified.
