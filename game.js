@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_1_MOBILE_MEDIA_SWIPE_FIX",
+  build: "V49_35_2_MOBILE_OPERATOR_COOP_EXIT_FIX",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -1274,7 +1274,7 @@ const mobileInput = {
   activeButtons:{},
   touchActions:{},
   ignoreMouseUntil:0,
-  uiStartX:0,uiStartY:0,uiLastX:0,uiLastY:0,uiMoved:false,uiAxis:"",
+  uiStartX:0,uiStartY:0,uiLastX:0,uiLastY:0,uiMoved:false,uiAxis:"",uiDeferredTap:false,
   floraWheel:{open:false,touchId:null,x:0,y:0,selected:"",timer:0,cooldownUntil:0},
   chloeAimTouchId:null,
   touchPoints:{},crystalPinch:{active:false,ids:[],distance:0}
@@ -1395,7 +1395,6 @@ function applyMobileSwipeDelta(dx,dy,p){
   if(gameMode==="operation"&&selectedTab==="combat")operationHandleWheel(delta,p.x,p.y);
   if(gameMode==="operation"&&selectedTab==="dualCrystal"&&p.x>=878&&window.PZCrystalWar?.handleWheel)window.PZCrystalWar.handleWheel(delta,p.x,p.y);
   if(gameMode==="operation"&&window.PZDaydream?.handleWheel)window.PZDaydream.handleWheel(delta,p.x,p.y);
-  if(gameMode==="operators"&&operatorPageMode==="list")operatorListWheelDelta+=delta;
   if(gameMode==="lobby"&&lobbyAssistantSelectorOpen&&lobbyAssistantSelectorTab==="executor")lobbyAssistantExecutorWheelDelta+=delta;
   if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="limited")shopLimitedWheelDelta+=delta;
   if(gameMode==="warehouse")warehouseWheelDelta+=delta;
@@ -1516,7 +1515,10 @@ function handleMobileTouchStart(e){
       }else mobileInput.touchActions[t.identifier]="battlefield";
       continue;
     }
-    if(mobileInput.uiTouchId===null){mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=true;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiMoved=false;mobileInput.uiAxis="";mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);sfx("ui");}
+    if(mobileInput.uiTouchId===null){
+      const deferTap=(gameMode==="operators"&&operatorPageMode==="list")||(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent"&&p.y>=230&&p.y<=550);
+      mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=!deferTap;mobileInput.uiDeferredTap=deferTap;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiMoved=false;mobileInput.uiAxis="";mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);if(!deferTap)sfx("ui");
+    }
   }
 }
 
@@ -1542,7 +1544,9 @@ function handleMobileTouchMove(e){
       const totalX=p.x-mobileInput.uiStartX,totalY=p.y-mobileInput.uiStartY;
       if(Math.hypot(totalX,totalY)>9){
         mobileInput.uiMoved=true;clicked=false;if(!mobileInput.uiAxis)mobileInput.uiAxis=Math.abs(totalX)>Math.abs(totalY)*1.15?"x":"y";
-        if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent"&&mobileInput.uiStartY>=230&&mobileInput.uiStartY<=550){
+        if(gameMode==="operators"&&operatorPageMode==="list"){
+          const order=executorOrder(),max=Math.max(0,order.length*212-12-(W-84)),step=mobileInput.uiAxis==="x"?-dx:-dy;operatorListScrollX=clamp(operatorListScrollX+step,0,max);
+        }else if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent"&&mobileInput.uiStartY>=230&&mobileInput.uiStartY<=550){
           if(mobileInput.uiAxis==="x")shopRecruitScrollX=clamp(shopRecruitScrollX-dx,0,permanentRecruitMaxScroll());
           else shopRecruitWheelDelta+=-dy;
         }else applyMobileSwipeDelta(dx,dy,p);
@@ -1562,7 +1566,7 @@ function handleMobileTouchEnd(e){
     else if(action==="floraPending"){clearTimeout(mobileInput.floraWheel.timer);const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;attackBuffer=10;mobileInput.floraWheel.touchId=null;}
     else if(action==="floraWheel")closeFloraWheel(true);
     else if(action.startsWith("button:")){if(action==="button:attack"&&mobileInput.activeButtons.attack!=="interact"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
-    else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t);if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mobileInput.uiAxis="";mouseDown=false;mouseAttackConsumed=false;}
+    else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t);if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);if(mobileInput.uiDeferredTap&&!mobileInput.uiMoved){mouseX=p.x;mouseY=p.y;clicked=true;sfx("ui");}mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mobileInput.uiAxis="";mobileInput.uiDeferredTap=false;mouseDown=false;mouseAttackConsumed=false;}
     delete mobileInput.touchActions[t.identifier];
     delete mobileInput.touchPoints[t.identifier];
   }
