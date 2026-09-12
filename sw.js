@@ -2,7 +2,7 @@
 
 const params=new URL(self.location.href).searchParams;
 const BUILD=params.get("build")||"stable";
-const CACHE_NAME="project-zero-web-v3-"+BUILD;
+const CACHE_NAME="project-zero-web-v4-"+BUILD;
 const CORE_FILES=[
   "./","./index.html","./style.css","./version.json","./account-config.js","./pz-account-api.js","./update-client.js",
   "./locales.js","./story_scripts.js","./story_events.js","./story_engine.js",
@@ -43,7 +43,8 @@ async function networkFirst(request){
   const cache=await caches.open(CACHE_NAME);
   try{
     const response=await fetch(request,{cache:"no-store"});
-    if(response&&response.ok) await cache.put(request,response.clone());
+    if(!response||!response.ok) throw new Error("HTTP_"+(response&&response.status));
+    await cache.put(request,response.clone());
     return response;
   }catch(error){
     const cached=await cache.match(request,{ignoreSearch:false})||await cache.match(request,{ignoreSearch:true});
@@ -63,7 +64,7 @@ self.addEventListener("fetch",event=>{
   }
   if(request.headers.has("range")&&/\.(?:mp3|ogg|wav|m4a)$/i.test(url.pathname)){
     event.respondWith((async()=>{
-      try{return await fetch(request,{cache:"no-store"});}catch(error){
+      try{const response=await fetch(request,{cache:"no-store"});if(!response||(!response.ok&&response.status!==206))throw new Error("AUDIO_RANGE_HTTP_"+(response&&response.status));return response;}catch(error){
         const cache=await caches.open(CACHE_NAME);
         const full=await cache.match(url.href,{ignoreSearch:true});
         if(!full) throw error;
@@ -81,6 +82,10 @@ self.addEventListener("fetch",event=>{
     return;
   }
   if(request.mode==="navigate"||/\.(?:js|css|html|json)$/i.test(url.pathname)){
+    event.respondWith(networkFirst(request));
+    return;
+  }
+  if(/\.(?:png|jpg|jpeg|webp|svg|mp3|ogg|wav|m4a)$/i.test(url.pathname)){
     event.respondWith(networkFirst(request));
     return;
   }

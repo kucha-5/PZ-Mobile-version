@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_3_MOBILE_TOUCH_PARITY_FIX",
+  build: "V49_35_4_MOBILE_MEDIA_RECOVERY_FIX",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -25,49 +25,51 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 function pzAssetUrl(path){
-  try{return new URL(String(path||"").replace(/^\.\//,""),document.baseURI).href;}catch(_){return path;}
+  try{const url=new URL(String(path||"").replace(/^\.\//,""),document.baseURI),build=window.PZ_UPDATE_INFO&&window.PZ_UPDATE_INFO.build;if(build&&/^https?:$/.test(url.protocol))url.searchParams.set("pzbuild",String(build));return url.href;}catch(_){return path;}
 }
+
+function setPzImageSource(img,path){let retried=false;img.decoding="async";img.addEventListener("error",()=>{if(retried)return;retried=true;try{const url=new URL(pzAssetUrl(path));url.searchParams.set("pzretry",String(Date.now()));img.src=url.href;}catch(_){}},{once:false});img.src=pzAssetUrl(path);return img;}
 
 // === PZ Custom Cursor System ===
 const pzCursorImg = new Image();
-pzCursorImg.src = pzAssetUrl("assets/ui/pz_cursor.png");
+setPzImageSource(pzCursorImg,"assets/ui/pz_cursor.png");
 const lobbyBackgroundImg = new Image();
-lobbyBackgroundImg.src = pzAssetUrl("assets/ui/lobby_background.png");
+setPzImageSource(lobbyBackgroundImg,"assets/ui/lobby_background.png");
 let lobbyBackgroundReady = false;
 lobbyBackgroundImg.onload = () => { lobbyBackgroundReady = true; };
 queueMicrotask(()=>{if(lobbyBackgroundImg.complete&&lobbyBackgroundImg.naturalWidth)lobbyBackgroundReady=true;});
 const hermitPortraitImg = new Image();
-hermitPortraitImg.src = pzAssetUrl("assets/ui/hermit_portrait_display.png");
+setPzImageSource(hermitPortraitImg,"assets/ui/hermit_portrait_display.png");
 let hermitPortraitReady = false;
 hermitPortraitImg.onload = () => { hermitPortraitReady = true; };
 queueMicrotask(()=>{if(hermitPortraitImg.complete&&hermitPortraitImg.naturalWidth)hermitPortraitReady=true;});
 const floraPortraitImg = new Image();
-floraPortraitImg.src = pzAssetUrl("assets/ui/flora_portrait_display.png");
+setPzImageSource(floraPortraitImg,"assets/ui/flora_portrait_display.png");
 let floraPortraitReady = false;
 floraPortraitImg.onload = () => { floraPortraitReady = true; };
 queueMicrotask(()=>{if(floraPortraitImg.complete&&floraPortraitImg.naturalWidth)floraPortraitReady=true;});
 const floraExecutorPortraitImg = new Image();
-floraExecutorPortraitImg.src = pzAssetUrl("assets/ui/flora_portrait_executor.png");
+setPzImageSource(floraExecutorPortraitImg,"assets/ui/flora_portrait_executor.png");
 let floraExecutorPortraitReady = false;
 floraExecutorPortraitImg.onload = () => { floraExecutorPortraitReady = true; };
 queueMicrotask(()=>{if(floraExecutorPortraitImg.complete&&floraExecutorPortraitImg.naturalWidth)floraExecutorPortraitReady=true;});
 const kanePortraitImg = new Image();
-kanePortraitImg.src = pzAssetUrl("assets/ui/kane_portrait.png");
+setPzImageSource(kanePortraitImg,"assets/ui/kane_portrait.png");
 let kanePortraitReady = false;
 kanePortraitImg.onload = () => { kanePortraitReady = true; };
 queueMicrotask(()=>{if(kanePortraitImg.complete&&kanePortraitImg.naturalWidth)kanePortraitReady=true;});
 const crystalCurrencyImg = new Image();
-crystalCurrencyImg.src = pzAssetUrl("assets/ui/currency_crystal.png");
+setPzImageSource(crystalCurrencyImg,"assets/ui/currency_crystal.png");
 let crystalCurrencyReady = false;
 crystalCurrencyImg.onload = () => { crystalCurrencyReady = true; };
 queueMicrotask(()=>{if(crystalCurrencyImg.complete&&crystalCurrencyImg.naturalWidth)crystalCurrencyReady=true;});
 const goldCurrencyImg = new Image();
-goldCurrencyImg.src = pzAssetUrl("assets/ui/currency_gold.png");
+setPzImageSource(goldCurrencyImg,"assets/ui/currency_gold.png");
 let goldCurrencyReady = false;
 goldCurrencyImg.onload = () => { goldCurrencyReady = true; };
 queueMicrotask(()=>{if(goldCurrencyImg.complete&&goldCurrencyImg.naturalWidth)goldCurrencyReady=true;});
 const staminaCurrencyImg = new Image();
-staminaCurrencyImg.src = pzAssetUrl("assets/ui/currency_stamina.png");
+setPzImageSource(staminaCurrencyImg,"assets/ui/currency_stamina.png");
 let staminaCurrencyReady = false;
 staminaCurrencyImg.onload = () => { staminaCurrencyReady = true; };
 queueMicrotask(()=>{if(staminaCurrencyImg.complete&&staminaCurrencyImg.naturalWidth)staminaCurrencyReady=true;});
@@ -81,7 +83,7 @@ const CRYSTAL_TOPUP_TIERS = [
 ];
 const crystalTopupTierImgs=CRYSTAL_TOPUP_TIERS.map(t=>{
   if(!t.image)return null;
-  const img=new Image();img.src=pzAssetUrl(t.image);return img;
+  const img=new Image();setPzImageSource(img,t.image);return img;
 });
 let hermitLobbyBorderlessLayer = null;
 let floraLobbyBorderlessLayer = null;
@@ -700,11 +702,11 @@ function retryActiveBgmAfterUnlock(){
 }
 
 function unlockAudio(){
-  if(!audioCtx){
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
   audioUnlocked = true;
-  if(audioCtx.state === "suspended"){
+  if(!audioCtx){
+    try{const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(AudioContextClass)audioCtx=new AudioContextClass();}catch(_){}
+  }
+  if(audioCtx&&audioCtx.state === "suspended"){
     if(!audioResumePromise){
       audioResumePromise = Promise.resolve(audioCtx.resume()).catch(()=>null).finally(()=>{
         audioResumePromise = null;
@@ -716,6 +718,12 @@ function unlockAudio(){
   // is otherwise rejected by browser autoplay policy on GitHub Pages.
   retryActiveBgmAfterUnlock();
 }
+
+// Canvas controls, native text fields and PWA chrome can receive different
+// first-touch event paths. Capture every genuine user gesture so iOS/Android
+// get another chance to resume both WebAudio and HTMLMediaElement playback.
+document.addEventListener("pointerdown",unlockAudio,{capture:true,passive:true});
+document.addEventListener("touchstart",unlockAudio,{capture:true,passive:true});
 
 function restoreMobileAudioAfterInterruption(){
   if(!mobileInput.enabled||!audioUnlocked||document.hidden)return;
