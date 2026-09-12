@@ -1,0 +1,4 @@
+Project Zero Mobile V49.35.0
+Build: 2026091104-mobile-viewport-pinch-interact
+
+Independent touch-first Mobile edition. PC/Web source is not modified.

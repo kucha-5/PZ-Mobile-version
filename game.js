@@ -24,39 +24,43 @@ window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+function pzAssetUrl(path){
+  try{const url=new URL(String(path||"").replace(/^\.\//,""),document.baseURI),build=window.PZ_UPDATE_INFO?.build;if(build&&/^https?:$/.test(url.protocol))url.searchParams.set("pzbuild",String(build));return url.href;}catch(_){return path;}
+}
+
 // === PZ Custom Cursor System ===
 const pzCursorImg = new Image();
-pzCursorImg.src = "assets/ui/pz_cursor.png";
+pzCursorImg.src = pzAssetUrl("assets/ui/pz_cursor.png");
 const lobbyBackgroundImg = new Image();
-lobbyBackgroundImg.src = "assets/ui/lobby_background.png";
+lobbyBackgroundImg.src = pzAssetUrl("assets/ui/lobby_background.png");
 let lobbyBackgroundReady = false;
 lobbyBackgroundImg.onload = () => { lobbyBackgroundReady = true; };
 const hermitPortraitImg = new Image();
-hermitPortraitImg.src = "assets/ui/hermit_portrait_display.png";
+hermitPortraitImg.src = pzAssetUrl("assets/ui/hermit_portrait_display.png");
 let hermitPortraitReady = false;
 hermitPortraitImg.onload = () => { hermitPortraitReady = true; };
 const floraPortraitImg = new Image();
-floraPortraitImg.src = "assets/ui/flora_portrait_display.png";
+floraPortraitImg.src = pzAssetUrl("assets/ui/flora_portrait_display.png");
 let floraPortraitReady = false;
 floraPortraitImg.onload = () => { floraPortraitReady = true; };
 const floraExecutorPortraitImg = new Image();
-floraExecutorPortraitImg.src = "assets/ui/flora_portrait_executor.png";
+floraExecutorPortraitImg.src = pzAssetUrl("assets/ui/flora_portrait_executor.png");
 let floraExecutorPortraitReady = false;
 floraExecutorPortraitImg.onload = () => { floraExecutorPortraitReady = true; };
 const kanePortraitImg = new Image();
-kanePortraitImg.src = "assets/ui/kane_portrait.png";
+kanePortraitImg.src = pzAssetUrl("assets/ui/kane_portrait.png");
 let kanePortraitReady = false;
 kanePortraitImg.onload = () => { kanePortraitReady = true; };
 const crystalCurrencyImg = new Image();
-crystalCurrencyImg.src = "assets/ui/currency_crystal.png";
+crystalCurrencyImg.src = pzAssetUrl("assets/ui/currency_crystal.png");
 let crystalCurrencyReady = false;
 crystalCurrencyImg.onload = () => { crystalCurrencyReady = true; };
 const goldCurrencyImg = new Image();
-goldCurrencyImg.src = "assets/ui/currency_gold.png";
+goldCurrencyImg.src = pzAssetUrl("assets/ui/currency_gold.png");
 let goldCurrencyReady = false;
 goldCurrencyImg.onload = () => { goldCurrencyReady = true; };
 const staminaCurrencyImg = new Image();
-staminaCurrencyImg.src = "assets/ui/currency_stamina.png";
+staminaCurrencyImg.src = pzAssetUrl("assets/ui/currency_stamina.png");
 let staminaCurrencyReady = false;
 staminaCurrencyImg.onload = () => { staminaCurrencyReady = true; };
 const CRYSTAL_TOPUP_TIERS = [
@@ -69,7 +73,7 @@ const CRYSTAL_TOPUP_TIERS = [
 ];
 const crystalTopupTierImgs=CRYSTAL_TOPUP_TIERS.map(t=>{
   if(!t.image)return null;
-  const img=new Image();img.src=t.image;return img;
+  const img=new Image();img.src=pzAssetUrl(t.image);return img;
 });
 let hermitLobbyBorderlessLayer = null;
 let floraLobbyBorderlessLayer = null;
@@ -304,7 +308,7 @@ if(typeof ResizeObserver!=="undefined"){
   if(gameWrap) new ResizeObserver(scheduleAdaptiveResize).observe(gameWrap);
 }
 let audioCtx = null;
-const BUILD_TARGET = "PC";
+const BUILD_TARGET = "MOBILE";
 const I18N_RES = window.PROJECT_ZERO_I18N || {};
 
 const MSG_TEXT = I18N_RES.MSG_TEXT || {
@@ -703,6 +707,13 @@ function unlockAudio(){
   // is otherwise rejected by browser autoplay policy on GitHub Pages.
   retryActiveBgmAfterUnlock();
 }
+
+function restoreMobileAudioAfterInterruption(){
+  if(!mobileInput.enabled||!audioUnlocked||document.hidden)return;
+  try{if(audioCtx&&(audioCtx.state==="suspended"||audioCtx.state==="interrupted"))Promise.resolve(audioCtx.resume()).then(retryActiveBgmAfterUnlock).catch(()=>{});else retryActiveBgmAfterUnlock();}catch(_){}
+}
+window.addEventListener("pageshow",()=>setTimeout(restoreMobileAudioAfterInterruption,80),{passive:true});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(restoreMobileAudioAfterInterruption,80);},{passive:true});
 
 function audioEase01(x){
   x = clamp(Number(x) || 0, 0, 1);
@@ -1249,11 +1260,13 @@ const mobileInput = {
   ignoreMouseUntil:0,
   uiStartX:0,uiStartY:0,uiLastX:0,uiLastY:0,uiMoved:false,
   floraWheel:{open:false,touchId:null,x:0,y:0,selected:"",timer:0,cooldownUntil:0},
-  chloeAimTouchId:null
+  chloeAimTouchId:null,
+  touchPoints:{},crystalPinch:{active:false,ids:[],distance:0}
 };
 
 const mobileMotion={x:0,y:0,hasData:false,requested:false};
 const mobileBattery={level:null,charging:false};
+const mobileViewport={width:0,height:0,orientation:"",keyboardOpen:false};
 
 function initMobileDeviceSignals(){
   window.addEventListener("deviceorientation",e=>{
@@ -1279,6 +1292,9 @@ function shouldShowMobileControls(){
   return mobileInput.enabled && !battlePaused && (gameMode==="battle" || gameMode==="tutorialBattle");
 }
 
+function isMobileWaitingSpace(){return !!(mobileInput.enabled&&gameMode==="operation"&&selectedTab==="dualCrystal"&&window.PZCrystalWar?.isMobileWaitingSpace?.());}
+function shouldShowMobileJoystick(){return shouldShowMobileControls()||isMobileWaitingSpace();}
+
 function detectPZDevice(){
   const touch=isMobileLike();
   const shortest=Math.min(screen.width||innerWidth,screen.height||innerHeight);
@@ -1290,17 +1306,35 @@ function detectPZDevice(){
   return mobileInput.device;
 }
 
-function applyMobileViewportLayout(){
+function applyMobileViewportLayout(force=false){
   const wrap=document.getElementById("gameWrap");if(!wrap)return;
   if(!mobileInput.enabled){wrap.style.removeProperty("width");wrap.style.removeProperty("height");return;}
-  const vw=Math.max(1,window.visualViewport?window.visualViewport.width:window.innerWidth);
-  const vh=Math.max(1,window.visualViewport?window.visualViewport.height:window.innerHeight);
+  const orientation=(screen.orientation&&screen.orientation.type)||((innerWidth>=innerHeight)?"landscape":"portrait");
+  const innerW=Math.max(1,window.innerWidth),innerH=Math.max(1,window.innerHeight),vv=window.visualViewport;
+  const keyboardLikely=(document.documentElement.dataset.pzKeyboard==="open"||isTypingTarget(document.activeElement))&&vv&&vv.height<innerH*.82;
+  mobileViewport.keyboardOpen=!!keyboardLikely;
+  if(keyboardLikely&&!force&&mobileViewport.width&&mobileViewport.height)return;
+  const vw=Math.max(1,vv&&!keyboardLikely?vv.width:innerW),vh=Math.max(1,vv&&!keyboardLikely?vv.height:innerH);
+  if(!force&&mobileViewport.orientation===orientation&&mobileViewport.width&&Math.abs(vw-mobileViewport.width)<4&&Math.abs(vh-mobileViewport.height)<4)return;
+  mobileViewport.width=vw;mobileViewport.height=vh;mobileViewport.orientation=orientation;
   const ratio=W/H;let width=Math.min(vw,vh*ratio),height=width/ratio;
   wrap.style.width=Math.floor(width)+"px";wrap.style.height=Math.floor(height)+"px";
 }
 
 function setKeyVirtual(key, down){
   keys[key] = !!down;
+}
+
+function mobileHasNearbyInteraction(){
+  if(!player||!(gameMode==="battle"||gameMode==="tutorialBattle"))return false;
+  if(battleModeSource==="projectArea"&&Array.isArray(projectAreaObjects))return projectAreaObjects.some(o=>!o.done&&dist(player.x,player.y,o.x,o.y)<55);
+  if(typeof supportsStageExploration==="function"&&supportsStageExploration()&&Array.isArray(battleExploreObjects))return battleExploreObjects.some(o=>!o.done&&o.type!=="crate"&&dist(player.x,player.y,o.x,o.y)<72);
+  return false;
+}
+
+function mobileTeamSlotDisabled(slot){
+  const roleId=Array.isArray(team)?team[slot]:null;
+  return !Number.isInteger(roleId)||roleId===player.role||player.switchCd>0||ult.active||(Array.isArray(battleRoleHp)&&(battleRoleHp[roleId]||0)<=0);
 }
 
 function mobileButtonRects(){
@@ -1310,14 +1344,18 @@ function mobileButtonRects(){
   //          E / 技能
   //    R / 切换     ATK / 普攻
   //          DODGE / 冲刺
+  const interact=mobileHasNearbyInteraction(),slotGap=mobileInput.device==="tablet"?66:58,slotY=50,slotRight=W-104;
   return {
-    attack:{x:W-168,y:H-128,r:68,label:language==="en"?"ATK":"普攻",key:"mouse1",kind:"main"},
+    attack:{x:W-158,y:H-120,r:62,label:interact?(language==="en"?"INTERACT":"交互"):(language==="en"?"ATK":"普攻"),key:interact?"f":"mouse1",kind:interact?"interact":"main",interact},
     dash:{x:W-70,y:H-48,r:43,label:language==="en"?"DODGE":"闪避",key:"shift",kind:"dash"},
     skill:{x:W-246,y:H-236,r:42,label:language==="en"?"SKILL":"技能",key:"e",kind:"skill"},
     ult:{x:W-125,y:H-274,r:46,label:language==="en"?"ULT":"大招",key:"q",kind:"ult"},
     swap:{x:W-315,y:H-132,r:39,label:language==="en"?"SWAP":"切换",key:"r",kind:"swap"},
     parry:{x:W-365,y:H-62,r:35,label:language==="en"?"PARRY":"弹刀",key:" ",kind:"parry"},
-    menu:{x:W-52,y:52,r:31,label:"MENU",key:"escape",kind:"menu"}
+    team0:{x:slotRight-slotGap*2,y:slotY,r:25,label:"1",key:"1",kind:"team",slot:0},
+    team1:{x:slotRight-slotGap,y:slotY,r:25,label:"2",key:"2",kind:"team",slot:1},
+    team2:{x:slotRight,y:slotY,r:25,label:"3",key:"3",kind:"team",slot:2},
+    menu:{x:W-46,y:50,r:28,label:"MENU",key:"escape",kind:"menu"}
   };
 }
 
@@ -1339,7 +1377,7 @@ function applyMobileSwipeDelta(dx,dy,p){
   const delta=Math.abs(dy)>=Math.abs(dx)?-dy:-dx;
   if(gameMode==="archive"&&archiveEntry>=0&&archiveTab===0)archiveDetailScroll=Math.max(0,archiveDetailScroll+delta);
   if(gameMode==="operation"&&selectedTab==="combat")operationHandleWheel(delta,p.x,p.y);
-  if(gameMode==="operation"&&selectedTab==="dualCrystal"&&window.PZCrystalWar?.handleWheel)window.PZCrystalWar.handleWheel(delta,p.x,p.y);
+  if(gameMode==="operation"&&selectedTab==="dualCrystal"&&p.x>=878&&window.PZCrystalWar?.handleWheel)window.PZCrystalWar.handleWheel(delta,p.x,p.y);
   if(gameMode==="operation"&&window.PZDaydream?.handleWheel)window.PZDaydream.handleWheel(delta,p.x,p.y);
   if(gameMode==="operators"&&operatorPageMode==="list")operatorListWheelDelta+=delta;
   if(gameMode==="lobby"&&lobbyAssistantSelectorOpen&&lobbyAssistantSelectorTab==="executor")lobbyAssistantExecutorWheelDelta+=delta;
@@ -1374,12 +1412,12 @@ function pressMobileButton(name){
   const rc = mobileButtonRects()[name];
   if(!rc) return;
   if(name === "attack"){
-    mouseDown = true;
-    clicked = false;
+    if(rc.interact){setKeyVirtual("f",true);mouseDown=false;mouseAttackConsumed=true;}
+    else{mouseDown = true;clicked = false;}
   }else{
     setKeyVirtual(rc.key, true);
   }
-  mobileInput.activeButtons[name] = true;
+  mobileInput.activeButtons[name] = rc.interact?"interact":true;
 }
 
 function releaseMobileButtons(){
@@ -1387,6 +1425,7 @@ function releaseMobileButtons(){
     const rc = mobileButtonRects()[name];
     if(!rc) continue;
     if(name === "attack"){
+      if(mobileInput.activeButtons[name]==="interact")setKeyVirtual("f",false);
       mouseDown = false;
       mouseAttackConsumed = false;
     }else{
@@ -1399,7 +1438,7 @@ function releaseMobileButtons(){
 function releaseMobileButton(name){
   const rc=mobileButtonRects()[name];
   if(!rc)return;
-  if(name==="attack"){mouseDown=false;mouseAttackConsumed=false;}
+  if(name==="attack"){if(mobileInput.activeButtons[name]==="interact")setKeyVirtual("f",false);mouseDown=false;mouseAttackConsumed=false;}
   else setKeyVirtual(rc.key,false);
   delete mobileInput.activeButtons[name];
 }
@@ -1410,6 +1449,7 @@ function updateMobileMoveKeys(){
   setKeyVirtual("d", mobileInput.moveX > dead);
   setKeyVirtual("w", mobileInput.moveY < -dead);
   setKeyVirtual("s", mobileInput.moveY > dead);
+  window.PZCrystalWar?.setMobileLobbyMove?.(Math.abs(mobileInput.moveX)<dead?0:mobileInput.moveX,Math.abs(mobileInput.moveY)<dead?0:mobileInput.moveY);
 }
 
 function clearMobileMoveKeys(){
@@ -1421,6 +1461,16 @@ function clearMobileMoveKeys(){
 function handleMobileTouchStart(e){
   if(!mobileInput.enabled)return;
   e.preventDefault();unlockAudio();mobileInput.ignoreMouseUntil=performance.now()+800;
+  for(const t of e.changedTouches)mobileInput.touchPoints[t.identifier]=canvasPointFromTouch(t);
+  const pointEntries=Object.entries(mobileInput.touchPoints);
+  if(gameMode==="operation"&&selectedTab==="dualCrystal"&&pointEntries.length>=2){
+    const pair=pointEntries.slice(0,2),a=pair[0][1],b=pair[1][1],cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
+    if(window.PZCrystalWar?.mobilePinch?.(1,cx,cy)){
+      mobileInput.crystalPinch={active:true,ids:pair.map(v=>Number(v[0])),distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))};
+      for(const id of mobileInput.crystalPinch.ids)mobileInput.touchActions[id]="crystalPinch";
+      window.PZCrystalWar?.cancelMobilePointer?.();mobileInput.uiTouchId=null;clicked=false;mouseDown=false;return;
+    }
+  }
   for(const t of e.changedTouches){
     const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;
     if(gameMode==="boot"){
@@ -1429,18 +1479,20 @@ function handleMobileTouchStart(e){
     }
     if(gameMode==="lobby")requestMobileMotionPermission();
     if(tryOpenMobileNativeKeyboardAt(p)){mobileInput.touchActions[t.identifier]="keyboard";continue;}
-    if(shouldShowMobileControls()){
+    if(shouldShowMobileJoystick()){
       if(p.x<390&&p.y>285&&mobileInput.joyId===null){
         mobileInput.joyId=t.identifier;mobileInput.joyBaseX=clamp(p.x,90,260);mobileInput.joyBaseY=clamp(p.y,390,H-95);mobileInput.joyX=p.x;mobileInput.joyY=p.y;mobileInput.touchActions[t.identifier]="joystick";continue;
       }
+      if(!shouldShowMobileControls()){mobileInput.touchActions[t.identifier]="waitingSpace";continue;}
       const buttons=mobileButtonRects();let hit="";
       for(const name of Object.keys(buttons)){
-        if(isFloraRole()&&(name==="attack"||name==="skill"||name==="ult"))continue;
+        if(isFloraRole()&&((name==="attack"&&!buttons.attack.interact)||name==="skill"||name==="ult"))continue;
         if(chloeAttackCharge.active&&name!=="attack")continue;
+        if(name.startsWith("team")&&mobileTeamSlotDisabled(buttons[name].slot))continue;
         if(pointInRect(p,buttons[name])){hit=name;break;}
       }
       if(hit){
-        if(hit==="attack"){mouseX=player.x+player.facing*320;mouseY=player.y;if(player.role===5)mobileInput.chloeAimTouchId=t.identifier;}
+        if(hit==="attack"&&!buttons.attack.interact){mouseX=player.x+player.facing*320;mouseY=player.y;if(player.role===5)mobileInput.chloeAimTouchId=t.identifier;}
         pressMobileButton(hit);mobileInput.touchActions[t.identifier]="button:"+hit;continue;
       }
       if(isFloraRole()){
@@ -1456,6 +1508,11 @@ function handleMobileTouchStart(e){
 function handleMobileTouchMove(e){
   if(!mobileInput.enabled)return;
   e.preventDefault();mobileInput.ignoreMouseUntil=performance.now()+800;
+  for(const t of e.changedTouches)mobileInput.touchPoints[t.identifier]=canvasPointFromTouch(t);
+  if(mobileInput.crystalPinch.active){
+    const [ia,ib]=mobileInput.crystalPinch.ids,a=mobileInput.touchPoints[ia],b=mobileInput.touchPoints[ib];
+    if(a&&b){const d=Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;window.PZCrystalWar?.mobilePinch?.(d/mobileInput.crystalPinch.distance,cx,cy);mobileInput.crystalPinch.distance=d;}return;
+  }
   for(const t of e.changedTouches){
     const p=canvasPointFromTouch(t),action=mobileInput.touchActions[t.identifier];
     if(action==="joystick"){
@@ -1482,10 +1539,12 @@ function handleMobileTouchEnd(e){
     if(action==="joystick"){mobileInput.joyId=null;clearMobileMoveKeys();}
     else if(action==="floraPending"){clearTimeout(mobileInput.floraWheel.timer);const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;attackBuffer=10;mobileInput.floraWheel.touchId=null;}
     else if(action==="floraWheel")closeFloraWheel(true);
-    else if(action.startsWith("button:")){if(action==="button:attack"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
+    else if(action.startsWith("button:")){if(action==="button:attack"&&mobileInput.activeButtons.attack!=="interact"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
     else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t);if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mouseDown=false;mouseAttackConsumed=false;}
     delete mobileInput.touchActions[t.identifier];
+    delete mobileInput.touchPoints[t.identifier];
   }
+  if(mobileInput.crystalPinch.active&&mobileInput.crystalPinch.ids.some(id=>!mobileInput.touchPoints[id])){mobileInput.crystalPinch={active:false,ids:[],distance:0};window.PZCrystalWar?.finishMobilePinch?.();clicked=false;mouseDown=false;}
   if(gameMode==="nameInput"&&!mobileNativeKeyboardTarget)openMobileNativeKeyboard("name");
 }
 
@@ -1497,6 +1556,7 @@ canvas.addEventListener("touchend",handleMobileTouchEnd,{passive:false});
 canvas.addEventListener("touchcancel",handleMobileTouchEnd,{passive:false});
 window.addEventListener("resize",detectPZDevice,{passive:true});
 if(window.visualViewport)window.visualViewport.addEventListener("resize",applyMobileViewportLayout,{passive:true});
+window.addEventListener("orientationchange",()=>setTimeout(()=>{detectPZDevice();applyMobileViewportLayout(true);},220),{passive:true});
 
 
 
@@ -4743,7 +4803,7 @@ function ensureMobileNativeKeyboardInput(){
     else if(mobileNativeKeyboardTarget==="email"){accountFocusedField="password";openMobileNativeKeyboard("password");}
     else if(mobileNativeKeyboardTarget==="password"){if(accountMode==="register")accountRegisterFlow();else accountLoginFlow();}
   });
-  input.addEventListener("blur",()=>{if(document.activeElement!==input)mobileNativeKeyboardTarget="";});
+  input.addEventListener("blur",()=>{if(document.activeElement!==input){mobileNativeKeyboardTarget="";document.documentElement.dataset.pzKeyboard="closed";setTimeout(()=>applyMobileViewportLayout(true),420);}});
   document.body.appendChild(input);mobileNativeKeyboardInput=input;return input;
 }
 
@@ -4757,6 +4817,7 @@ function openMobileNativeKeyboard(target){
   if(!mobileInput.enabled)return false;
   const input=ensureMobileNativeKeyboardInput(),rect=mobileKeyboardFieldRect(target),canvasRect=canvas.getBoundingClientRect();
   mobileNativeKeyboardTarget=target;
+  document.documentElement.dataset.pzKeyboard="open";
   const codeMode=target==="password"&&accountMode==="register"&&accountRegisterStep==="code";
   input.type=target==="password"&&!codeMode?"password":target==="email"?"email":"text";
   input.inputMode=codeMode?"numeric":target==="email"?"email":"text";
@@ -20055,24 +20116,31 @@ function drawEffects(){
 
 
 function drawMobileControls(){
-  if(!shouldShowMobileControls())return;
+  if(!shouldShowMobileJoystick())return;
+  const fullControls=shouldShowMobileControls();
   const buttons=mobileButtonRects();ctx.save();ctx.textAlign="center";ctx.textBaseline="middle";
   const bx=mobileInput.joyId===null?165:mobileInput.joyBaseX,by=mobileInput.joyId===null?H-120:mobileInput.joyBaseY;
-  ctx.shadowColor="rgba(0,0,0,.7)";ctx.shadowBlur=18;ctx.fillStyle="rgba(3,8,18,.52)";ctx.beginPath();ctx.arc(bx,by,84,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle="rgba(180,220,255,.46)";ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle="rgba(3,8,18,.30)";ctx.beginPath();ctx.arc(bx,by,78,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(205,228,245,.38)";ctx.lineWidth=2;ctx.stroke();
   ctx.strokeStyle="rgba(124,199,255,.18)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(bx-57,by);ctx.lineTo(bx+57,by);ctx.moveTo(bx,by-57);ctx.lineTo(bx,by+57);ctx.stroke();
   const kx=mobileInput.joyId===null?bx:mobileInput.joyX,ky=mobileInput.joyId===null?by:mobileInput.joyY;
-  const jg=ctx.createRadialGradient(kx-8,ky-10,2,kx,ky,34);jg.addColorStop(0,"rgba(210,246,255,.64)");jg.addColorStop(1,"rgba(50,142,205,.28)");ctx.fillStyle=jg;ctx.beginPath();ctx.arc(kx,ky,34,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#a9e8ff";ctx.lineWidth=2;ctx.stroke();
-  const mobileColors={main:"#e6ad2f",skill:"#b75cff",ult:"#ff5965",swap:"#b8beca",dash:"#62bfff",parry:"#7cc7ff"};
+  ctx.shadowColor="#71cfff";ctx.shadowBlur=9;ctx.fillStyle="rgba(76,173,226,.24)";ctx.beginPath();ctx.arc(kx,ky,31,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(150,221,255,.76)";ctx.lineWidth=2;ctx.stroke();ctx.shadowBlur=0;
+  if(!fullControls){ctx.fillStyle="rgba(225,242,255,.68)";ctx.font="bold 11px "+FONT_UI;ctx.fillText(language==="en"?"MOVE":"移动",bx,by+108);ctx.restore();return;}
+  const mobileColors={main:"#d9a52d",interact:"#69e5d0",skill:"#aa63db",ult:"#e65b67",swap:"#aeb7c5",dash:"#67aeda",parry:"#78badf"};
   for(const [name,b] of Object.entries(buttons)){
     if(name==="menu")continue;
-    if(isFloraRole()&&(name==="attack"||name==="skill"||name==="ult"))continue;
+    if(name.startsWith("team")){
+      const roleId=Array.isArray(team)?team[b.slot]:null,valid=Number.isInteger(roleId),current=valid&&roleId===player.role,disabled=!valid||mobileTeamSlotDisabled(b.slot),color=valid?(roles[roleId]?.color||"#7cc7ff"):"#667080";
+      ctx.globalAlpha=disabled&&!current?.38:1;ctx.fillStyle="rgba(6,11,22,.58)";ctx.beginPath();ctx.arc(b.x,b.y,current?28:b.r,0,Math.PI*2);ctx.fill();ctx.shadowColor=color;ctx.shadowBlur=current?15:0;ctx.strokeStyle=current?"#fff":color;ctx.lineWidth=current?3:1.5;ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle=color;ctx.beginPath();ctx.arc(b.x,b.y,current?17:15,0,Math.PI*2);ctx.fill();ctx.fillStyle="#07101c";ctx.font="bold 11px "+FONT_UI;ctx.fillText(valid?roleName(roleId).slice(0,1):String(b.slot+1),b.x,b.y);ctx.fillStyle="#fff";ctx.font="bold 8px Arial";ctx.fillText(String(b.slot+1),b.x+18,b.y+18);
+      if(valid&&player.switchCd>0&&!current){ctx.globalAlpha=.72;ctx.fillStyle="rgba(0,0,0,.7)";ctx.beginPath();ctx.arc(b.x,b.y,b.r-2,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 9px Arial";ctx.fillText((player.switchCd/60).toFixed(1),b.x,b.y);}ctx.globalAlpha=1;continue;
+    }
+    if(isFloraRole()&&((name==="attack"&&!b.interact)||name==="skill"||name==="ult"))continue;
     if(chloeAttackCharge.active&&name!=="attack")continue;
     const active=!!mobileInput.activeButtons[name];
     const disabled=name==="skill"?player.skillCd>0||player.energy<SKILL_ENERGY_COST:name==="ult"?player.ultCd>0||player.ult<ULT_MAX:name==="dash"?player.dashCd>0:false;
-    const color=mobileColors[b.kind]||mobileColors[name]||"#7cc7ff";ctx.globalAlpha=disabled?.42:1;ctx.shadowColor=color;ctx.shadowBlur=active?24:10;const g=ctx.createRadialGradient(b.x-b.r*.25,b.y-b.r*.3,2,b.x,b.y,b.r);g.addColorStop(0,active?"#fff":color);g.addColorStop(.18,active?color:"rgba(30,38,58,.94)");g.addColorStop(1,"rgba(4,8,18,.88)");ctx.fillStyle=g;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=active?"#fff":disabled?"rgba(255,255,255,.24)":color;ctx.lineWidth=active?5:3;ctx.stroke();ctx.strokeStyle="rgba(255,255,255,.15)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(b.x,b.y,b.r-7,0,Math.PI*2);ctx.stroke();ctx.fillStyle=disabled?"#8993a3":"#fff";ctx.font="bold "+(name==="attack"?18:12)+"px "+FONT_UI;ctx.fillText(b.label,b.x,b.y+(disabled?5:0));
+    const color=mobileColors[b.kind]||mobileColors[name]||"#7cc7ff";ctx.globalAlpha=disabled?.42:1;ctx.shadowColor=color;ctx.shadowBlur=active?13:5;ctx.fillStyle=active?color:"rgba(7,12,23,.48)";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=active?"rgba(255,255,255,.92)":disabled?"rgba(255,255,255,.20)":color;ctx.lineWidth=active?3:2;ctx.stroke();ctx.strokeStyle="rgba(255,255,255,.10)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(b.x,b.y,b.r-6,0,Math.PI*2);ctx.stroke();ctx.fillStyle=disabled?"#8993a3":"#fff";ctx.font="bold "+(name==="attack"?17:11)+"px "+FONT_UI;ctx.fillText(b.label,b.x,b.y+(disabled?5:0));
     if(disabled){const cd=name==="skill"?player.skillCd:name==="ult"?player.ultCd:player.dashCd;ctx.font="bold 10px Arial";ctx.fillText(cd>0?(cd/60).toFixed(1)+"s":"—",b.x,b.y-13);}ctx.globalAlpha=1;
   }
-  if(isFloraRole()&&!mobileInput.floraWheel.open){ctx.fillStyle="rgba(8,14,26,.62)";ctx.strokeStyle="#c787ff";ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(W-330,H-68,250,34,17);ctx.fill();ctx.stroke();ctx.fillStyle="#efd9ff";ctx.font="bold 12px "+FONT_UI;ctx.fillText(language==="en"?"TAP FIELD · HOLD FOR ARCANA":"点击战场普攻 · 长按呼出法武轮盘",W-205,H-51);}
+  if(isFloraRole()&&!mobileInput.floraWheel.open&&!buttons.attack.interact){ctx.fillStyle="rgba(220,190,255,.58)";ctx.font="bold 10px "+FONT_UI;ctx.fillText(language==="en"?"TAP: ATTACK  ·  HOLD: ARCANA":"点击普攻 · 长按法武",W-190,H-34);}
   const fw=mobileInput.floraWheel;
   if(fw.open){
     ctx.save();ctx.fillStyle="rgba(2,4,12,.42)";ctx.fillRect(0,0,W,H);ctx.shadowColor="#c787ff";ctx.shadowBlur=26;ctx.fillStyle="rgba(12,8,28,.94)";ctx.beginPath();ctx.arc(fw.x,fw.y,138,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
@@ -20173,6 +20241,7 @@ function updateBattlePauseMenu(){
 }
 
 function drawBattlePauseButton(){
+  if(mobileInput.enabled){const b=mobileButtonRects().menu,hover=pointInRect({x:mouseX,y:mouseY},b);ctx.save();ctx.fillStyle=hover?"rgba(124,199,255,.22)":"rgba(6,11,22,.48)";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=hover?"#fff":"rgba(190,220,242,.52)";ctx.lineWidth=2;ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 18px Arial";ctx.textAlign="center";ctx.fillText("Ⅱ",b.x,b.y+6);ctx.restore();return;}
   const hover=inRect(W-72,18,50,44);
   ctx.save();ctx.fillStyle=hover?"rgba(255,224,102,.20)":"rgba(7,9,18,.82)";ctx.fillRect(W-72,18,50,44);
   ctx.strokeStyle=hover?"#ffe066":"rgba(255,255,255,.34)";ctx.lineWidth=2;ctx.strokeRect(W-72,18,50,44);

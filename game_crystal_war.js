@@ -1014,4 +1014,13 @@ function click17(){if(S.page==="memoryEditV17")return clickMemoryEditor18();if(S
 const wheelBase17=wheel8;function wheel17(delta,x,y){if(S.page==="myMemoriesV17"){memoryListScroll17=Math.max(0,Math.min(Math.max(0,memories16().length-6),memoryListScroll17+Math.sign(delta)));return true;}return wheelBase17(delta,x,y);}
 const escapeBase17=escape8;function escape17(){if(S.page==="memoryEditV17"){const page=memorySearch17?"sharedBlueprintsV16":"baseBuild";memoryEditor17=null;memorySearch17=false;closeMemoryInput17();S.page=page;return true;}if(S.page==="myMemoriesV17"){S.page="sharedBlueprintsV16";return true;}if(S.page==="sharedBlueprintsV16"){S.page="blueprints";return true;}return escapeBase17();}
 g.PZCrystalWar.update=update17;g.PZCrystalWar.draw=draw17;g.PZCrystalWar.handleClick=click17;g.PZCrystalWar.handleEscape=escape17;g.PZCrystalWar.handleWheel=wheel17;g.PZCrystalWar.pointerDown=pointerDown17;g.PZCrystalWar.pointerMove=pointerMove17;g.PZCrystalWar.pointerUp=pointerUp17;
+g.PZCrystalWar.isMobileWaitingSpace=()=>isRoomMap14();
+g.PZCrystalWar.setMobileLobbyMove=(x,y)=>{coopLobbyKeys13.a=x<-.16;coopLobbyKeys13.d=x>.16;coopLobbyKeys13.w=y<-.16;coopLobbyKeys13.s=y>.16;};
+g.PZCrystalWar.cancelMobilePointer=()=>{drag.active=false;selectBox16=null;};
+g.PZCrystalWar.mobilePinch=(factor,x,y)=>{
+ if(S.page!=="baseBuild"||!g.inRect(VIEW7.x,VIEW7.y,VIEW7.w,VIEW7.h))return false;
+ const before=world7(x,y),next=Math.max(.55,Math.min(1.6,S.zoom*Math.max(.82,Math.min(1.22,factor))));
+ if(Math.abs(next-S.zoom)<.0001)return true;S.zoom=next;const after=world7(x,y);S.camera.x+=before.x-after.x;S.camera.y+=before.y-after.y;clamp7();return true;
+};
+g.PZCrystalWar.finishMobilePinch=()=>{if(S.page==="baseBuild")save();};
 })(window);
