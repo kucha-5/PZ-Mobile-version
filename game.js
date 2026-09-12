@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_4_MOBILE_MEDIA_RECOVERY_FIX",
+  build: "V49_35_5_MOBILE_MEMORY_INPUT_COOP_EXIT_FIX",
   edition: "mobile",
   storyModule: true,
   optimized: true

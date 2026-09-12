@@ -1,0 +1,4 @@
+Project Zero Mobile V49.35.5
+Build: 2026091204-mobile-memory-input-coop-exit-fix
+
+Independent Mobile edition. PC/Web source is not modified.
