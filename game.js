@@ -1246,8 +1246,30 @@ const mobileInput = {
   moveY:0,
   activeButtons:{},
   touchActions:{},
-  ignoreMouseUntil:0
+  ignoreMouseUntil:0,
+  uiStartX:0,uiStartY:0,uiLastX:0,uiLastY:0,uiMoved:false,
+  floraWheel:{open:false,touchId:null,x:0,y:0,selected:"",timer:0,cooldownUntil:0},
+  chloeAimTouchId:null
 };
+
+const mobileMotion={x:0,y:0,hasData:false,requested:false};
+const mobileBattery={level:null,charging:false};
+
+function initMobileDeviceSignals(){
+  window.addEventListener("deviceorientation",e=>{
+    if(!mobileInput.enabled||!Number.isFinite(e.gamma)||!Number.isFinite(e.beta))return;
+    mobileMotion.x=clamp(e.gamma/18,-1,1);mobileMotion.y=clamp((e.beta-45)/24,-1,1);mobileMotion.hasData=true;
+  },{passive:true});
+  if(navigator.getBattery)navigator.getBattery().then(b=>{
+    const sync=()=>{mobileBattery.level=clamp(b.level,0,1);mobileBattery.charging=!!b.charging;};sync();
+    b.addEventListener("levelchange",sync);b.addEventListener("chargingchange",sync);
+  }).catch(()=>{});
+}
+
+function requestMobileMotionPermission(){
+  if(mobileMotion.requested)return;mobileMotion.requested=true;
+  try{const fn=window.DeviceOrientationEvent&&DeviceOrientationEvent.requestPermission;if(typeof fn==="function")fn.call(DeviceOrientationEvent).catch(()=>{});}catch(e){}
+}
 
 function isMobileLike(){
   return navigator.maxTouchPoints>0 && ((window.matchMedia&&window.matchMedia("(pointer: coarse)").matches) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
@@ -1297,6 +1319,40 @@ function mobileButtonRects(){
     parry:{x:W-365,y:H-62,r:35,label:language==="en"?"PARRY":"弹刀",key:" ",kind:"parry"},
     menu:{x:W-52,y:52,r:31,label:"MENU",key:"escape",kind:"menu"}
   };
+}
+
+function floraWheelPick(p){
+  const w=mobileInput.floraWheel,dx=p.x-w.x,dy=p.y-w.y,d=Math.hypot(dx,dy);
+  if(d<42||d>145)return "";
+  return dx<0?"skill":"ult";
+}
+
+function closeFloraWheel(cast){
+  const w=mobileInput.floraWheel,choice=w.selected;w.open=false;w.touchId=null;w.selected="";w.timer=0;w.cooldownUntil=performance.now()+300;slowMo=Math.min(slowMo,7);
+  if(!cast||!choice)return;
+  const target=lockTarget&&lockTarget.alive?lockTarget:nearestEnemy();if(target){mouseX=target.x;mouseY=target.y;lockTarget=target;}
+  if(choice==="skill"&&player.skillCd<=0)skillBuffer=10;
+  if(choice==="ult"&&player.ultCd<=0&&player.ult>=ULT_MAX)ultBuffer=10;
+}
+
+function applyMobileSwipeDelta(dx,dy,p){
+  const delta=Math.abs(dy)>=Math.abs(dx)?-dy:-dx;
+  if(gameMode==="archive"&&archiveEntry>=0&&archiveTab===0)archiveDetailScroll=Math.max(0,archiveDetailScroll+delta);
+  if(gameMode==="operation"&&selectedTab==="combat")operationHandleWheel(delta,p.x,p.y);
+  if(gameMode==="operation"&&selectedTab==="dualCrystal"&&window.PZCrystalWar?.handleWheel)window.PZCrystalWar.handleWheel(delta,p.x,p.y);
+  if(gameMode==="operation"&&window.PZDaydream?.handleWheel)window.PZDaydream.handleWheel(delta,p.x,p.y);
+  if(gameMode==="operators"&&operatorPageMode==="list")operatorListWheelDelta+=delta;
+  if(gameMode==="lobby"&&lobbyAssistantSelectorOpen&&lobbyAssistantSelectorTab==="executor")lobbyAssistantExecutorWheelDelta+=delta;
+  if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent")shopRecruitWheelDelta+=delta;
+  if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="limited")shopLimitedWheelDelta+=delta;
+  if(gameMode==="warehouse")warehouseWheelDelta+=delta;
+  if(gameMode==="achievements"){const visible=ACHIEVEMENT_LIST.filter(a=>achievementCategory==="all"||a.cat===achievementCategory);achievementScroll=clamp(achievementScroll+(delta>0?1:-1),0,Math.max(0,visible.length-7));}
+  if(gameMode==="friends"&&friendPanelMode==="list"){const source=friendSocialSection==="blocked"?friendBlocked:friendSocialSection==="requests"?friendIncoming:friendList;friendListScroll=clamp(friendListScroll+(delta>0?1:-1),0,Math.max(0,source.length-5));}
+  if(gameMode==="team")teamRosterWheelDelta+=delta;
+  if(gameMode==="actionRecord")actionRecordWheelDelta+=delta;
+  if(gameMode==="operation"&&selectedTab==="dungeon"&&dungeonPanelMode==="material"&&materialDungeonSelected===3)moduleArchiveWheelDelta+=delta;
+  if(gameMode==="operation"&&selectedTab==="dungeon"&&dungeonPanelMode==="material"&&materialDungeonSelected!==3){const max=Math.max(0,materialDungeonsV42().length*170-910);materialDungeonScroll=clamp(materialDungeonScroll+delta,0,max);}
+  if(gameMode==="operators"&&operatorPageMode==="detail"&&operatorTab==="module"&&moduleWarehouseSlot)moduleWarehouseWheelDelta+=delta;
 }
 
 function canvasPointFromTouch(t){
@@ -1367,21 +1423,33 @@ function handleMobileTouchStart(e){
   e.preventDefault();unlockAudio();mobileInput.ignoreMouseUntil=performance.now()+800;
   for(const t of e.changedTouches){
     const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;
+    if(gameMode==="boot"){
+      if(bootSkipReady||(performance.now()-bootStartTime)>900){gameMode=bootNextMode||"login";if(gameMode==="login")requestLoginBgmPlay();}
+      mobileInput.touchActions[t.identifier]="boot";continue;
+    }
+    if(gameMode==="lobby")requestMobileMotionPermission();
     if(tryOpenMobileNativeKeyboardAt(p)){mobileInput.touchActions[t.identifier]="keyboard";continue;}
     if(shouldShowMobileControls()){
       if(p.x<390&&p.y>285&&mobileInput.joyId===null){
         mobileInput.joyId=t.identifier;mobileInput.joyBaseX=clamp(p.x,90,260);mobileInput.joyBaseY=clamp(p.y,390,H-95);mobileInput.joyX=p.x;mobileInput.joyY=p.y;mobileInput.touchActions[t.identifier]="joystick";continue;
       }
       const buttons=mobileButtonRects();let hit="";
-      for(const name of Object.keys(buttons))if(pointInRect(p,buttons[name])){hit=name;break;}
+      for(const name of Object.keys(buttons)){
+        if(isFloraRole()&&(name==="attack"||name==="skill"||name==="ult"))continue;
+        if(chloeAttackCharge.active&&name!=="attack")continue;
+        if(pointInRect(p,buttons[name])){hit=name;break;}
+      }
       if(hit){
-        if(hit==="attack"){mouseX=player.x+player.facing*320;mouseY=player.y;}
+        if(hit==="attack"){mouseX=player.x+player.facing*320;mouseY=player.y;if(player.role===5)mobileInput.chloeAimTouchId=t.identifier;}
         pressMobileButton(hit);mobileInput.touchActions[t.identifier]="button:"+hit;continue;
       }
-      mobileInput.touchActions[t.identifier]="battlefield";
+      if(isFloraRole()){
+        const w=mobileInput.floraWheel;mobileInput.touchActions[t.identifier]="floraPending";w.touchId=t.identifier;w.x=p.x;w.y=p.y;w.selected="";
+        clearTimeout(w.timer);w.timer=setTimeout(()=>{if(mobileInput.touchActions[t.identifier]==="floraPending"&&performance.now()>=w.cooldownUntil){w.open=true;mobileInput.touchActions[t.identifier]="floraWheel";slowMo=Math.max(slowMo,180);sfx("ui");}},360);
+      }else mobileInput.touchActions[t.identifier]="battlefield";
       continue;
     }
-    if(mobileInput.uiTouchId===null){mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=true;mobileInput.touchActions[t.identifier]="ui";sfx("ui");}
+    if(mobileInput.uiTouchId===null){mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=true;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiMoved=false;mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);sfx("ui");}
   }
 }
 
@@ -1393,7 +1461,16 @@ function handleMobileTouchMove(e){
     if(action==="joystick"){
       const dx=p.x-mobileInput.joyBaseX,dy=p.y-mobileInput.joyBaseY,len=Math.hypot(dx,dy)||1,max=72,scale=Math.min(1,max/len);
       mobileInput.joyX=mobileInput.joyBaseX+dx*scale;mobileInput.joyY=mobileInput.joyBaseY+dy*scale;mobileInput.moveX=clamp(dx/max,-1,1);mobileInput.moveY=clamp(dy/max,-1,1);updateMobileMoveKeys();
-    }else if(action==="ui"){mouseX=p.x;mouseY=p.y;}
+    }else if(action==="floraPending"){
+      mouseX=p.x;mouseY=p.y;
+    }else if(action==="floraWheel"){mouseX=p.x;mouseY=p.y;mobileInput.floraWheel.selected=floraWheelPick(p);
+    }else if(action==="button:attack"&&player.role===5){mouseX=p.x;mouseY=p.y;updateChloeAttackCharge();
+    }else if(action==="ui"){
+      const dx=p.x-mobileInput.uiLastX,dy=p.y-mobileInput.uiLastY;mouseX=p.x;mouseY=p.y;
+      if(Math.hypot(p.x-mobileInput.uiStartX,p.y-mobileInput.uiStartY)>9){mobileInput.uiMoved=true;clicked=false;applyMobileSwipeDelta(dx,dy,p);}
+      mobileInput.uiLastX=p.x;mobileInput.uiLastY=p.y;
+      if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerMove?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerMove?.(p.x,p.y);
+    }
   }
 }
 
@@ -1403,14 +1480,17 @@ function handleMobileTouchEnd(e){
   for(const t of e.changedTouches){
     const action=mobileInput.touchActions[t.identifier]||"";
     if(action==="joystick"){mobileInput.joyId=null;clearMobileMoveKeys();}
-    else if(action.startsWith("button:"))releaseMobileButton(action.slice(7));
-    else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mouseDown=false;mouseAttackConsumed=false;}
+    else if(action==="floraPending"){clearTimeout(mobileInput.floraWheel.timer);const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;attackBuffer=10;mobileInput.floraWheel.touchId=null;}
+    else if(action==="floraWheel")closeFloraWheel(true);
+    else if(action.startsWith("button:")){if(action==="button:attack"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
+    else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t);if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mouseDown=false;mouseAttackConsumed=false;}
     delete mobileInput.touchActions[t.identifier];
   }
   if(gameMode==="nameInput"&&!mobileNativeKeyboardTarget)openMobileNativeKeyboard("name");
 }
 
 detectPZDevice();
+initMobileDeviceSignals();
 canvas.addEventListener("touchstart",handleMobileTouchStart,{passive:false});
 canvas.addEventListener("touchmove",handleMobileTouchMove,{passive:false});
 canvas.addEventListener("touchend",handleMobileTouchEnd,{passive:false});
@@ -15210,8 +15290,8 @@ function drawLobby(){
   const parallaxNow=performance.now();
   const parallaxDt=lobbyParallaxLastRenderAt?clamp(parallaxNow-lobbyParallaxLastRenderAt,0,50):16.67;
   lobbyParallaxLastRenderAt=parallaxNow;
-  const parallaxTargetX=clamp((mouseX-W/2)/(W/2)*2.2,-2.2,2.2);
-  const parallaxTargetY=clamp((mouseY-H/2)/(H/2)*1.3,-1.3,1.3);
+  const parallaxTargetX=mobileInput.enabled&&mobileMotion.hasData?mobileMotion.x*4.4:clamp((mouseX-W/2)/(W/2)*2.2,-2.2,2.2);
+  const parallaxTargetY=mobileInput.enabled&&mobileMotion.hasData?mobileMotion.y*2.8:clamp((mouseY-H/2)/(H/2)*1.3,-1.3,1.3);
   const parallaxBlend=1-Math.exp(-parallaxDt/165);
   lobbyParallaxX+=(parallaxTargetX-lobbyParallaxX)*parallaxBlend;
   lobbyParallaxY+=(parallaxTargetY-lobbyParallaxY)*parallaxBlend;
@@ -15263,6 +15343,12 @@ function drawLobby(){
   const now=new Date();
   ctx.fillStyle="rgba(255,255,255,.58)";ctx.font="bold 16px Arial";ctx.textAlign="right";
   ctx.fillText(String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"),554,51);
+  if(mobileInput.enabled){
+    const bx=456,by=38,bw=31,bh=14,level=mobileBattery.level;
+    ctx.save();ctx.lineWidth=1.8;ctx.strokeStyle=mobileBattery.charging?"#7cffb2":"rgba(255,255,255,.62)";ctx.strokeRect(bx,by,bw,bh);ctx.fillStyle=ctx.strokeStyle;ctx.fillRect(bx+bw+2,by+4,3,6);
+    if(level!==null){ctx.fillRect(bx+2,by+2,(bw-4)*level,bh-4);ctx.font="bold 10px Arial";ctx.textAlign="right";ctx.fillText(Math.round(level*100)+"%",bx-5,by+11);}else{ctx.font="bold 10px Arial";ctx.textAlign="right";ctx.fillText("BAT",bx-5,by+11);}
+    if(mobileBattery.charging){ctx.fillStyle="#07120d";ctx.textAlign="center";ctx.font="bold 11px Arial";ctx.fillText("ϟ",bx+bw/2,by+11);}ctx.restore();
+  }
   drawCompactResourceBar(570,22,494,true);
 
   // Right-side functional card grid based on the supplied layout draft.
@@ -19972,17 +20058,29 @@ function drawMobileControls(){
   if(!shouldShowMobileControls())return;
   const buttons=mobileButtonRects();ctx.save();ctx.textAlign="center";ctx.textBaseline="middle";
   const bx=mobileInput.joyId===null?165:mobileInput.joyBaseX,by=mobileInput.joyId===null?H-120:mobileInput.joyBaseY;
-  ctx.fillStyle="rgba(5,10,20,.38)";ctx.beginPath();ctx.arc(bx,by,76,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(124,199,255,.42)";ctx.lineWidth=3;ctx.stroke();
+  ctx.shadowColor="rgba(0,0,0,.7)";ctx.shadowBlur=18;ctx.fillStyle="rgba(3,8,18,.52)";ctx.beginPath();ctx.arc(bx,by,84,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle="rgba(180,220,255,.46)";ctx.lineWidth=2;ctx.stroke();
+  ctx.strokeStyle="rgba(124,199,255,.18)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(bx-57,by);ctx.lineTo(bx+57,by);ctx.moveTo(bx,by-57);ctx.lineTo(bx,by+57);ctx.stroke();
   const kx=mobileInput.joyId===null?bx:mobileInput.joyX,ky=mobileInput.joyId===null?by:mobileInput.joyY;
-  ctx.fillStyle="rgba(124,199,255,.34)";ctx.beginPath();ctx.arc(kx,ky,32,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#9de5ff";ctx.lineWidth=2;ctx.stroke();
+  const jg=ctx.createRadialGradient(kx-8,ky-10,2,kx,ky,34);jg.addColorStop(0,"rgba(210,246,255,.64)");jg.addColorStop(1,"rgba(50,142,205,.28)");ctx.fillStyle=jg;ctx.beginPath();ctx.arc(kx,ky,34,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#a9e8ff";ctx.lineWidth=2;ctx.stroke();
   const mobileColors={main:"#e6ad2f",skill:"#b75cff",ult:"#ff5965",swap:"#b8beca",dash:"#62bfff",parry:"#7cc7ff"};
   for(const [name,b] of Object.entries(buttons)){
     if(name==="menu")continue;
+    if(isFloraRole()&&(name==="attack"||name==="skill"||name==="ult"))continue;
+    if(chloeAttackCharge.active&&name!=="attack")continue;
     const active=!!mobileInput.activeButtons[name];
     const disabled=name==="skill"?player.skillCd>0||player.energy<SKILL_ENERGY_COST:name==="ult"?player.ultCd>0||player.ult<ULT_MAX:name==="dash"?player.dashCd>0:false;
-    const color=mobileColors[b.kind]||mobileColors[name]||"#7cc7ff";ctx.globalAlpha=disabled?.42:1;ctx.fillStyle=active?color:"rgba(8,14,26,.72)";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=active?"#fff":disabled?"rgba(255,255,255,.24)":color;ctx.lineWidth=active?5:3;ctx.stroke();ctx.fillStyle=disabled?"#8993a3":"#fff";ctx.font="bold "+(name==="attack"?18:12)+"px "+FONT_UI;ctx.fillText(b.label,b.x,b.y+(disabled?5:0));
+    const color=mobileColors[b.kind]||mobileColors[name]||"#7cc7ff";ctx.globalAlpha=disabled?.42:1;ctx.shadowColor=color;ctx.shadowBlur=active?24:10;const g=ctx.createRadialGradient(b.x-b.r*.25,b.y-b.r*.3,2,b.x,b.y,b.r);g.addColorStop(0,active?"#fff":color);g.addColorStop(.18,active?color:"rgba(30,38,58,.94)");g.addColorStop(1,"rgba(4,8,18,.88)");ctx.fillStyle=g;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=active?"#fff":disabled?"rgba(255,255,255,.24)":color;ctx.lineWidth=active?5:3;ctx.stroke();ctx.strokeStyle="rgba(255,255,255,.15)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(b.x,b.y,b.r-7,0,Math.PI*2);ctx.stroke();ctx.fillStyle=disabled?"#8993a3":"#fff";ctx.font="bold "+(name==="attack"?18:12)+"px "+FONT_UI;ctx.fillText(b.label,b.x,b.y+(disabled?5:0));
     if(disabled){const cd=name==="skill"?player.skillCd:name==="ult"?player.ultCd:player.dashCd;ctx.font="bold 10px Arial";ctx.fillText(cd>0?(cd/60).toFixed(1)+"s":"—",b.x,b.y-13);}ctx.globalAlpha=1;
   }
+  if(isFloraRole()&&!mobileInput.floraWheel.open){ctx.fillStyle="rgba(8,14,26,.62)";ctx.strokeStyle="#c787ff";ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(W-330,H-68,250,34,17);ctx.fill();ctx.stroke();ctx.fillStyle="#efd9ff";ctx.font="bold 12px "+FONT_UI;ctx.fillText(language==="en"?"TAP FIELD · HOLD FOR ARCANA":"点击战场普攻 · 长按呼出法武轮盘",W-205,H-51);}
+  const fw=mobileInput.floraWheel;
+  if(fw.open){
+    ctx.save();ctx.fillStyle="rgba(2,4,12,.42)";ctx.fillRect(0,0,W,H);ctx.shadowColor="#c787ff";ctx.shadowBlur=26;ctx.fillStyle="rgba(12,8,28,.94)";ctx.beginPath();ctx.arc(fw.x,fw.y,138,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    const opts=[{id:"skill",x:fw.x-82,label:language==="en"?"SKILL":"技能",color:"#b75cff",off:player.skillCd>0},{id:"ult",x:fw.x+82,label:language==="en"?"ULT":"大招",color:"#ff5965",off:player.ultCd>0||player.ult<ULT_MAX}];
+    for(const o of opts){const on=fw.selected===o.id;ctx.globalAlpha=o.off?.38:1;ctx.fillStyle=on?o.color:"rgba(20,25,43,.96)";ctx.strokeStyle=on?"#fff":o.color;ctx.lineWidth=on?5:3;ctx.beginPath();ctx.arc(o.x,fw.y,48,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 14px "+FONT_UI;ctx.fillText(o.label,o.x,fw.y);ctx.globalAlpha=1;}
+    ctx.fillStyle="rgba(255,255,255,.14)";ctx.beginPath();ctx.arc(fw.x,fw.y,38,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(255,255,255,.55)";ctx.lineWidth=2;ctx.stroke();ctx.fillStyle="#fff";ctx.font="11px "+FONT_UI;ctx.fillText(language==="en"?"RELEASE":"松手释放",fw.x,fw.y);ctx.restore();
+  }
+  if(chloeAttackCharge.active){ctx.fillStyle="rgba(11,8,28,.78)";ctx.strokeStyle="#bda7ff";ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(W/2-170,H-52,340,32,16);ctx.fill();ctx.stroke();ctx.fillStyle="#ede8ff";ctx.font="bold 12px "+FONT_UI;ctx.fillText(language==="en"?"DRAG TO SET RANGE · RELEASE TO FIRE":"拖动调整矩形射程 · 松手发动",W/2,H-36);}
   ctx.fillStyle="rgba(124,199,255,.72)";ctx.font="bold 10px "+FONT_UI;ctx.fillText(mobileInput.device.toUpperCase()+" TOUCH",W/2,H-18);ctx.restore();
 }
 
