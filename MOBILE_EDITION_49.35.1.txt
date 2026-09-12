@@ -1,0 +1,4 @@
+Project Zero Mobile V49.35.1
+Build: 2026091105-mobile-media-swipe-pause-fix
+
+Independent touch-first Mobile edition. PC/Web source is not modified.

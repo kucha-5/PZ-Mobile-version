@@ -2,8 +2,8 @@
   "use strict";
 
   const VERSION_URL="version.json";
-  const LOCAL_VERSION="49.35.0";
-  const LOCAL_BUILD="2026091104-mobile-viewport-pinch-interact";
+  const LOCAL_VERSION="49.35.1";
+  const LOCAL_BUILD="2026091105-mobile-media-swipe-pause-fix";
   const FILE_RUNTIME=location.protocol==="file:";
   const BUILD_KEY="pz_runtime_build";
   const VERSION_KEY="pz_runtime_version";

@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_33_1_MOBILE_STANDALONE_TOUCH",
+  build: "V49_35_1_MOBILE_MEDIA_SWIPE_FIX",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -25,7 +25,7 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 function pzAssetUrl(path){
-  try{const url=new URL(String(path||"").replace(/^\.\//,""),document.baseURI),build=window.PZ_UPDATE_INFO?.build;if(build&&/^https?:$/.test(url.protocol))url.searchParams.set("pzbuild",String(build));return url.href;}catch(_){return path;}
+  try{return new URL(String(path||"").replace(/^\.\//,""),document.baseURI).href;}catch(_){return path;}
 }
 
 // === PZ Custom Cursor System ===
@@ -35,34 +35,42 @@ const lobbyBackgroundImg = new Image();
 lobbyBackgroundImg.src = pzAssetUrl("assets/ui/lobby_background.png");
 let lobbyBackgroundReady = false;
 lobbyBackgroundImg.onload = () => { lobbyBackgroundReady = true; };
+queueMicrotask(()=>{if(lobbyBackgroundImg.complete&&lobbyBackgroundImg.naturalWidth)lobbyBackgroundReady=true;});
 const hermitPortraitImg = new Image();
 hermitPortraitImg.src = pzAssetUrl("assets/ui/hermit_portrait_display.png");
 let hermitPortraitReady = false;
 hermitPortraitImg.onload = () => { hermitPortraitReady = true; };
+queueMicrotask(()=>{if(hermitPortraitImg.complete&&hermitPortraitImg.naturalWidth)hermitPortraitReady=true;});
 const floraPortraitImg = new Image();
 floraPortraitImg.src = pzAssetUrl("assets/ui/flora_portrait_display.png");
 let floraPortraitReady = false;
 floraPortraitImg.onload = () => { floraPortraitReady = true; };
+queueMicrotask(()=>{if(floraPortraitImg.complete&&floraPortraitImg.naturalWidth)floraPortraitReady=true;});
 const floraExecutorPortraitImg = new Image();
 floraExecutorPortraitImg.src = pzAssetUrl("assets/ui/flora_portrait_executor.png");
 let floraExecutorPortraitReady = false;
 floraExecutorPortraitImg.onload = () => { floraExecutorPortraitReady = true; };
+queueMicrotask(()=>{if(floraExecutorPortraitImg.complete&&floraExecutorPortraitImg.naturalWidth)floraExecutorPortraitReady=true;});
 const kanePortraitImg = new Image();
 kanePortraitImg.src = pzAssetUrl("assets/ui/kane_portrait.png");
 let kanePortraitReady = false;
 kanePortraitImg.onload = () => { kanePortraitReady = true; };
+queueMicrotask(()=>{if(kanePortraitImg.complete&&kanePortraitImg.naturalWidth)kanePortraitReady=true;});
 const crystalCurrencyImg = new Image();
 crystalCurrencyImg.src = pzAssetUrl("assets/ui/currency_crystal.png");
 let crystalCurrencyReady = false;
 crystalCurrencyImg.onload = () => { crystalCurrencyReady = true; };
+queueMicrotask(()=>{if(crystalCurrencyImg.complete&&crystalCurrencyImg.naturalWidth)crystalCurrencyReady=true;});
 const goldCurrencyImg = new Image();
 goldCurrencyImg.src = pzAssetUrl("assets/ui/currency_gold.png");
 let goldCurrencyReady = false;
 goldCurrencyImg.onload = () => { goldCurrencyReady = true; };
+queueMicrotask(()=>{if(goldCurrencyImg.complete&&goldCurrencyImg.naturalWidth)goldCurrencyReady=true;});
 const staminaCurrencyImg = new Image();
 staminaCurrencyImg.src = pzAssetUrl("assets/ui/currency_stamina.png");
 let staminaCurrencyReady = false;
 staminaCurrencyImg.onload = () => { staminaCurrencyReady = true; };
+queueMicrotask(()=>{if(staminaCurrencyImg.complete&&staminaCurrencyImg.naturalWidth)staminaCurrencyReady=true;});
 const CRYSTAL_TOPUP_TIERS = [
   {crystals:70,price:"$0.99",image:""},
   {crystals:400,price:"$4.99",image:"assets/ui/crystal_topup_400.png"},
@@ -81,6 +89,7 @@ let kaneLobbyBorderlessLayer = null;
 let pzCursorReady = false;
 let pzCursorPulse = 0;
 pzCursorImg.onload = () => { pzCursorReady = true; };
+queueMicrotask(()=>{if(pzCursorImg.complete&&pzCursorImg.naturalWidth)pzCursorReady=true;});
 
 function pzCursorIsHoveringUI(){
   try{
@@ -729,9 +738,10 @@ function ensureLoginBgm(){
   if(loginBgmAudio || loginBgmUnavailable) return loginBgmAudio;
   try{
     const src = LOGIN_BGM_PATHS[loginBgmPathIndex] || LOGIN_BGM_PATHS[0];
-    const a = new Audio(githubSafeAudioUrl(src));
+    const a = new Audio();
     a.loop = true;
     a.preload = "auto";
+    a.playsInline = true;
     a.volume = 0;
     a.addEventListener("error", () => {
       if(loginBgmAudio===a) loginBgmAudio = null;
@@ -740,6 +750,7 @@ function ensureLoginBgm(){
         loginBgmUnavailable = true;
       }
     }, { once:true });
+    a.src=githubSafeAudioUrl(src);a.load();
     loginBgmAudio = a;
   }catch(e){
     loginBgmPathIndex++;
@@ -788,14 +799,16 @@ function ensureWorldBgmTrack(kind){
   const current=isShop ? shopBgmAudio : worldBgmAudio;
   if(current) return current;
   try{
-    const a=new Audio(githubSafeAudioUrl(isShop ? SHOP_BGM_PATH : WORLD_BGM_PATH));
+    const a=new Audio();
     a.loop=true;
     a.preload="auto";
+    a.playsInline=true;
     a.volume=0;
     a.addEventListener("error",()=>{
       if(isShop){shopBgmUnavailable=true;if(shopBgmAudio===a)shopBgmAudio=null;}
       else{worldBgmUnavailable=true;if(worldBgmAudio===a)worldBgmAudio=null;}
     },{once:true});
+    a.src=githubSafeAudioUrl(isShop ? SHOP_BGM_PATH : WORLD_BGM_PATH);a.load();
     if(isShop) shopBgmAudio=a;
     else worldBgmAudio=a;
     return a;
@@ -840,11 +853,13 @@ function ensureBossKrosBgm(){
   if(bossKrosBgmAudio&&bossBattleBgmPath!==desiredPath){try{bossKrosBgmAudio.pause();bossKrosBgmAudio.currentTime=0;}catch(e){}bossKrosBgmAudio=null;bossKrosBgmUnavailable=false;bossKrosBgmPlayPending=false;}
   if(bossKrosBgmAudio || bossKrosBgmUnavailable) return bossKrosBgmAudio;
   try{
-    const a=new Audio(githubSafeAudioUrl(desiredPath));
+    const a=new Audio();
     a.loop=true;
     a.preload="auto";
+    a.playsInline=true;
     a.volume=0;
     a.addEventListener("error",()=>{if(bossKrosBgmAudio===a){bossKrosBgmUnavailable=true;bossKrosBgmAudio=null;}},{once:true});
+    a.src=githubSafeAudioUrl(desiredPath);a.load();
     bossBattleBgmPath=desiredPath;bossKrosBgmAudio=a;
   }catch(e){bossKrosBgmUnavailable=true;}
   return bossKrosBgmAudio;
@@ -903,9 +918,10 @@ function selectChapterBgm(route){
   chapterBgmAudio=null;chapterBgmCurrentVolume=0;chapterBgmPlayPending=false;chapterBgmKey=nextKey;
   if(!nextKey || chapterBgmUnavailable.has(nextKey)) return;
   try{
-    const a=new Audio(githubSafeAudioUrl(route.path));
-    a.loop=true;a.preload="auto";a.volume=0;
+    const a=new Audio();
+    a.loop=true;a.preload="auto";a.playsInline=true;a.volume=0;
     a.addEventListener("error",()=>{chapterBgmUnavailable.add(nextKey);if(chapterBgmAudio===a)chapterBgmAudio=null;},{once:true});
+    a.src=githubSafeAudioUrl(route.path);a.load();
     chapterBgmAudio=a;
   }catch(e){chapterBgmUnavailable.add(nextKey);}
 }
@@ -1258,7 +1274,7 @@ const mobileInput = {
   activeButtons:{},
   touchActions:{},
   ignoreMouseUntil:0,
-  uiStartX:0,uiStartY:0,uiLastX:0,uiLastY:0,uiMoved:false,
+  uiStartX:0,uiStartY:0,uiLastX:0,uiLastY:0,uiMoved:false,uiAxis:"",
   floraWheel:{open:false,touchId:null,x:0,y:0,selected:"",timer:0,cooldownUntil:0},
   chloeAimTouchId:null,
   touchPoints:{},crystalPinch:{active:false,ids:[],distance:0}
@@ -1355,7 +1371,7 @@ function mobileButtonRects(){
     team0:{x:slotRight-slotGap*2,y:slotY,r:25,label:"1",key:"1",kind:"team",slot:0},
     team1:{x:slotRight-slotGap,y:slotY,r:25,label:"2",key:"2",kind:"team",slot:1},
     team2:{x:slotRight,y:slotY,r:25,label:"3",key:"3",kind:"team",slot:2},
-    menu:{x:W-46,y:50,r:28,label:"MENU",key:"escape",kind:"menu"}
+    menu:{x:W-72,y:18,w:50,h:44,label:"MENU",key:"escape",kind:"menu"}
   };
 }
 
@@ -1381,7 +1397,6 @@ function applyMobileSwipeDelta(dx,dy,p){
   if(gameMode==="operation"&&window.PZDaydream?.handleWheel)window.PZDaydream.handleWheel(delta,p.x,p.y);
   if(gameMode==="operators"&&operatorPageMode==="list")operatorListWheelDelta+=delta;
   if(gameMode==="lobby"&&lobbyAssistantSelectorOpen&&lobbyAssistantSelectorTab==="executor")lobbyAssistantExecutorWheelDelta+=delta;
-  if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent")shopRecruitWheelDelta+=delta;
   if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="limited")shopLimitedWheelDelta+=delta;
   if(gameMode==="warehouse")warehouseWheelDelta+=delta;
   if(gameMode==="achievements"){const visible=ACHIEVEMENT_LIST.filter(a=>achievementCategory==="all"||a.cat===achievementCategory);achievementScroll=clamp(achievementScroll+(delta>0?1:-1),0,Math.max(0,visible.length-7));}
@@ -1501,7 +1516,7 @@ function handleMobileTouchStart(e){
       }else mobileInput.touchActions[t.identifier]="battlefield";
       continue;
     }
-    if(mobileInput.uiTouchId===null){mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=true;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiMoved=false;mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);sfx("ui");}
+    if(mobileInput.uiTouchId===null){mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=true;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiMoved=false;mobileInput.uiAxis="";mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);sfx("ui");}
   }
 }
 
@@ -1524,7 +1539,14 @@ function handleMobileTouchMove(e){
     }else if(action==="button:attack"&&player.role===5){mouseX=p.x;mouseY=p.y;updateChloeAttackCharge();
     }else if(action==="ui"){
       const dx=p.x-mobileInput.uiLastX,dy=p.y-mobileInput.uiLastY;mouseX=p.x;mouseY=p.y;
-      if(Math.hypot(p.x-mobileInput.uiStartX,p.y-mobileInput.uiStartY)>9){mobileInput.uiMoved=true;clicked=false;applyMobileSwipeDelta(dx,dy,p);}
+      const totalX=p.x-mobileInput.uiStartX,totalY=p.y-mobileInput.uiStartY;
+      if(Math.hypot(totalX,totalY)>9){
+        mobileInput.uiMoved=true;clicked=false;if(!mobileInput.uiAxis)mobileInput.uiAxis=Math.abs(totalX)>Math.abs(totalY)*1.15?"x":"y";
+        if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent"&&mobileInput.uiStartY>=230&&mobileInput.uiStartY<=550){
+          if(mobileInput.uiAxis==="x")shopRecruitScrollX=clamp(shopRecruitScrollX-dx,0,permanentRecruitMaxScroll());
+          else shopRecruitWheelDelta+=-dy;
+        }else applyMobileSwipeDelta(dx,dy,p);
+      }
       mobileInput.uiLastX=p.x;mobileInput.uiLastY=p.y;
       if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerMove?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerMove?.(p.x,p.y);
     }
@@ -1540,7 +1562,7 @@ function handleMobileTouchEnd(e){
     else if(action==="floraPending"){clearTimeout(mobileInput.floraWheel.timer);const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;attackBuffer=10;mobileInput.floraWheel.touchId=null;}
     else if(action==="floraWheel")closeFloraWheel(true);
     else if(action.startsWith("button:")){if(action==="button:attack"&&mobileInput.activeButtons.attack!=="interact"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
-    else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t);if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mouseDown=false;mouseAttackConsumed=false;}
+    else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t);if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mobileInput.uiAxis="";mouseDown=false;mouseAttackConsumed=false;}
     delete mobileInput.touchActions[t.identifier];
     delete mobileInput.touchPoints[t.identifier];
   }
@@ -20241,7 +20263,6 @@ function updateBattlePauseMenu(){
 }
 
 function drawBattlePauseButton(){
-  if(mobileInput.enabled){const b=mobileButtonRects().menu,hover=pointInRect({x:mouseX,y:mouseY},b);ctx.save();ctx.fillStyle=hover?"rgba(124,199,255,.22)":"rgba(6,11,22,.48)";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=hover?"#fff":"rgba(190,220,242,.52)";ctx.lineWidth=2;ctx.stroke();ctx.fillStyle="#fff";ctx.font="bold 18px Arial";ctx.textAlign="center";ctx.fillText("Ⅱ",b.x,b.y+6);ctx.restore();return;}
   const hover=inRect(W-72,18,50,44);
   ctx.save();ctx.fillStyle=hover?"rgba(255,224,102,.20)":"rgba(7,9,18,.82)";ctx.fillRect(W-72,18,50,44);
   ctx.strokeStyle=hover?"#ffe066":"rgba(255,255,255,.34)";ctx.lineWidth=2;ctx.strokeRect(W-72,18,50,44);
