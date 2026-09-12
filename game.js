@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_2_MOBILE_OPERATOR_COOP_EXIT_FIX",
+  build: "V49_35_3_MOBILE_TOUCH_PARITY_FIX",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -1274,7 +1274,7 @@ const mobileInput = {
   activeButtons:{},
   touchActions:{},
   ignoreMouseUntil:0,
-  uiStartX:0,uiStartY:0,uiLastX:0,uiLastY:0,uiMoved:false,uiAxis:"",uiDeferredTap:false,
+  uiStartX:0,uiStartY:0,uiLastX:0,uiLastY:0,uiStartAt:0,uiMoved:false,uiAxis:"",uiDeferredTap:false,scrollAccum:0,
   floraWheel:{open:false,touchId:null,x:0,y:0,selected:"",timer:0,cooldownUntil:0},
   chloeAimTouchId:null,
   touchPoints:{},crystalPinch:{active:false,ids:[],distance:0}
@@ -1348,6 +1348,8 @@ function mobileHasNearbyInteraction(){
   return false;
 }
 
+function usesMobileArcanaUI(){return isFloraRole()||player?.role===1;}
+
 function mobileTeamSlotDisabled(slot){
   const roleId=Array.isArray(team)?team[slot]:null;
   return !Number.isInteger(roleId)||roleId===player.role||player.switchCd>0||ult.active||(Array.isArray(battleRoleHp)&&(battleRoleHp[roleId]||0)<=0);
@@ -1360,14 +1362,13 @@ function mobileButtonRects(){
   //          E / 技能
   //    R / 切换     ATK / 普攻
   //          DODGE / 冲刺
-  const interact=mobileHasNearbyInteraction(),slotGap=mobileInput.device==="tablet"?66:58,slotY=50,slotRight=W-104;
+  const interact=mobileHasNearbyInteraction(),parry=!interact&&!!findParryEnemy(),slotGap=mobileInput.device==="tablet"?66:58,slotY=50,slotRight=W-104;
   return {
-    attack:{x:W-158,y:H-120,r:62,label:interact?(language==="en"?"INTERACT":"交互"):(language==="en"?"ATK":"普攻"),key:interact?"f":"mouse1",kind:interact?"interact":"main",interact},
+    attack:{x:W-158,y:H-120,r:62,label:interact?(language==="en"?"INTERACT":"交互"):parry?(language==="en"?"PARRY":"弹刀"):(language==="en"?"ATK":"普攻"),key:interact?"f":parry?" ":"mouse1",kind:interact?"interact":parry?"parry":"main",interact,parry},
     dash:{x:W-70,y:H-48,r:43,label:language==="en"?"DODGE":"闪避",key:"shift",kind:"dash"},
     skill:{x:W-246,y:H-236,r:42,label:language==="en"?"SKILL":"技能",key:"e",kind:"skill"},
     ult:{x:W-125,y:H-274,r:46,label:language==="en"?"ULT":"大招",key:"q",kind:"ult"},
     swap:{x:W-315,y:H-132,r:39,label:language==="en"?"SWAP":"切换",key:"r",kind:"swap"},
-    parry:{x:W-365,y:H-62,r:35,label:language==="en"?"PARRY":"弹刀",key:" ",kind:"parry"},
     team0:{x:slotRight-slotGap*2,y:slotY,r:25,label:"1",key:"1",kind:"team",slot:0},
     team1:{x:slotRight-slotGap,y:slotY,r:25,label:"2",key:"2",kind:"team",slot:1},
     team2:{x:slotRight,y:slotY,r:25,label:"3",key:"3",kind:"team",slot:2},
@@ -1393,12 +1394,12 @@ function applyMobileSwipeDelta(dx,dy,p){
   const delta=Math.abs(dy)>=Math.abs(dx)?-dy:-dx;
   if(gameMode==="archive"&&archiveEntry>=0&&archiveTab===0)archiveDetailScroll=Math.max(0,archiveDetailScroll+delta);
   if(gameMode==="operation"&&selectedTab==="combat")operationHandleWheel(delta,p.x,p.y);
-  if(gameMode==="operation"&&selectedTab==="dualCrystal"&&p.x>=878&&window.PZCrystalWar?.handleWheel)window.PZCrystalWar.handleWheel(delta,p.x,p.y);
+  if(gameMode==="operation"&&selectedTab==="dualCrystal"&&window.PZCrystalWar?.mobileScroll)window.PZCrystalWar.mobileScroll(delta,p.x,p.y);
   if(gameMode==="operation"&&window.PZDaydream?.handleWheel)window.PZDaydream.handleWheel(delta,p.x,p.y);
   if(gameMode==="lobby"&&lobbyAssistantSelectorOpen&&lobbyAssistantSelectorTab==="executor")lobbyAssistantExecutorWheelDelta+=delta;
   if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="limited")shopLimitedWheelDelta+=delta;
   if(gameMode==="warehouse")warehouseWheelDelta+=delta;
-  if(gameMode==="achievements"){const visible=ACHIEVEMENT_LIST.filter(a=>achievementCategory==="all"||a.cat===achievementCategory);achievementScroll=clamp(achievementScroll+(delta>0?1:-1),0,Math.max(0,visible.length-7));}
+  if(gameMode==="achievements"){mobileInput.scrollAccum+=delta;if(Math.abs(mobileInput.scrollAccum)>=42){const visible=ACHIEVEMENT_LIST.filter(a=>achievementCategory==="all"||a.cat===achievementCategory);achievementScroll=clamp(achievementScroll+Math.sign(mobileInput.scrollAccum),0,Math.max(0,visible.length-7));mobileInput.scrollAccum=0;}}
   if(gameMode==="friends"&&friendPanelMode==="list"){const source=friendSocialSection==="blocked"?friendBlocked:friendSocialSection==="requests"?friendIncoming:friendList;friendListScroll=clamp(friendListScroll+(delta>0?1:-1),0,Math.max(0,source.length-5));}
   if(gameMode==="team")teamRosterWheelDelta+=delta;
   if(gameMode==="actionRecord")actionRecordWheelDelta+=delta;
@@ -1426,12 +1427,12 @@ function pressMobileButton(name){
   const rc = mobileButtonRects()[name];
   if(!rc) return;
   if(name === "attack"){
-    if(rc.interact){setKeyVirtual("f",true);mouseDown=false;mouseAttackConsumed=true;}
+    if(rc.interact||rc.parry){setKeyVirtual(rc.key,true);mouseDown=false;mouseAttackConsumed=true;}
     else{mouseDown = true;clicked = false;}
   }else{
     setKeyVirtual(rc.key, true);
   }
-  mobileInput.activeButtons[name] = rc.interact?"interact":true;
+  mobileInput.activeButtons[name] = rc.interact?"interact":rc.parry?"parry":true;
 }
 
 function releaseMobileButtons(){
@@ -1439,7 +1440,7 @@ function releaseMobileButtons(){
     const rc = mobileButtonRects()[name];
     if(!rc) continue;
     if(name === "attack"){
-      if(mobileInput.activeButtons[name]==="interact")setKeyVirtual("f",false);
+      if(mobileInput.activeButtons[name]==="interact")setKeyVirtual("f",false);else if(mobileInput.activeButtons[name]==="parry")setKeyVirtual(" ",false);
       mouseDown = false;
       mouseAttackConsumed = false;
     }else{
@@ -1452,7 +1453,7 @@ function releaseMobileButtons(){
 function releaseMobileButton(name){
   const rc=mobileButtonRects()[name];
   if(!rc)return;
-  if(name==="attack"){if(mobileInput.activeButtons[name]==="interact")setKeyVirtual("f",false);mouseDown=false;mouseAttackConsumed=false;}
+  if(name==="attack"){if(mobileInput.activeButtons[name]==="interact")setKeyVirtual("f",false);else if(mobileInput.activeButtons[name]==="parry")setKeyVirtual(" ",false);mouseDown=false;mouseAttackConsumed=false;}
   else setKeyVirtual(rc.key,false);
   delete mobileInput.activeButtons[name];
 }
@@ -1493,31 +1494,35 @@ function handleMobileTouchStart(e){
     }
     if(gameMode==="lobby")requestMobileMotionPermission();
     if(tryOpenMobileNativeKeyboardAt(p)){mobileInput.touchActions[t.identifier]="keyboard";continue;}
+    if((gameMode==="battle"||gameMode==="tutorialBattle")&&chainSelect){
+      chainSelectChoiceRequested=p.x<W/2?0:1;mobileInput.touchActions[t.identifier]="chainChoice";clicked=false;mouseDown=false;continue;
+    }
     if(shouldShowMobileJoystick()){
       if(p.x<390&&p.y>285&&mobileInput.joyId===null){
         mobileInput.joyId=t.identifier;mobileInput.joyBaseX=clamp(p.x,90,260);mobileInput.joyBaseY=clamp(p.y,390,H-95);mobileInput.joyX=p.x;mobileInput.joyY=p.y;mobileInput.touchActions[t.identifier]="joystick";continue;
       }
-      if(!shouldShowMobileControls()){mobileInput.touchActions[t.identifier]="waitingSpace";continue;}
-      const buttons=mobileButtonRects();let hit="";
-      for(const name of Object.keys(buttons)){
-        if(isFloraRole()&&((name==="attack"&&!buttons.attack.interact)||name==="skill"||name==="ult"))continue;
-        if(chloeAttackCharge.active&&name!=="attack")continue;
-        if(name.startsWith("team")&&mobileTeamSlotDisabled(buttons[name].slot))continue;
-        if(pointInRect(p,buttons[name])){hit=name;break;}
+      if(shouldShowMobileControls()){
+        const buttons=mobileButtonRects();let hit="";
+        for(const name of Object.keys(buttons)){
+          if(usesMobileArcanaUI()&&((name==="attack"&&!buttons.attack.interact&&!buttons.attack.parry)||name==="skill"||name==="ult"))continue;
+          if(chloeAttackCharge.active&&name!=="attack")continue;
+          if(name.startsWith("team")&&mobileTeamSlotDisabled(buttons[name].slot))continue;
+          if(pointInRect(p,buttons[name])){hit=name;break;}
+        }
+        if(hit){
+          if(hit==="attack"&&!buttons.attack.interact&&!buttons.attack.parry){mouseX=player.x+player.facing*320;mouseY=player.y;if(player.role===5)mobileInput.chloeAimTouchId=t.identifier;}
+          pressMobileButton(hit);mobileInput.touchActions[t.identifier]="button:"+hit;continue;
+        }
+        if(usesMobileArcanaUI()){
+          const w=mobileInput.floraWheel;mobileInput.touchActions[t.identifier]="floraPending";w.touchId=t.identifier;w.x=p.x;w.y=p.y;w.selected="";
+          clearTimeout(w.timer);w.timer=setTimeout(()=>{if(mobileInput.touchActions[t.identifier]==="floraPending"&&performance.now()>=w.cooldownUntil){w.open=true;mobileInput.touchActions[t.identifier]="floraWheel";slowMo=Math.max(slowMo,180);sfx("ui");}},360);
+        }else mobileInput.touchActions[t.identifier]="battlefield";
+        continue;
       }
-      if(hit){
-        if(hit==="attack"&&!buttons.attack.interact){mouseX=player.x+player.facing*320;mouseY=player.y;if(player.role===5)mobileInput.chloeAimTouchId=t.identifier;}
-        pressMobileButton(hit);mobileInput.touchActions[t.identifier]="button:"+hit;continue;
-      }
-      if(isFloraRole()){
-        const w=mobileInput.floraWheel;mobileInput.touchActions[t.identifier]="floraPending";w.touchId=t.identifier;w.x=p.x;w.y=p.y;w.selected="";
-        clearTimeout(w.timer);w.timer=setTimeout(()=>{if(mobileInput.touchActions[t.identifier]==="floraPending"&&performance.now()>=w.cooldownUntil){w.open=true;mobileInput.touchActions[t.identifier]="floraWheel";slowMo=Math.max(slowMo,180);sfx("ui");}},360);
-      }else mobileInput.touchActions[t.identifier]="battlefield";
-      continue;
     }
     if(mobileInput.uiTouchId===null){
-      const deferTap=(gameMode==="operators"&&operatorPageMode==="list")||(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent"&&p.y>=230&&p.y<=550);
-      mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=!deferTap;mobileInput.uiDeferredTap=deferTap;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiMoved=false;mobileInput.uiAxis="";mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);if(!deferTap)sfx("ui");
+      const deferTap=gameMode==="operators"||gameMode==="achievements"||gameMode==="warehouse"||gameMode==="actionRecord"||gameMode==="team"||(gameMode==="operation"&&selectedTab==="dualCrystal")||(gameMode==="shop"&&shopTab==="recruit")||(gameMode==="lobby"&&lobbyAssistantSelectorOpen);
+      mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=!deferTap;mobileInput.uiDeferredTap=deferTap;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiStartAt=performance.now();mobileInput.uiMoved=false;mobileInput.uiAxis="";mobileInput.scrollAccum=0;mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);if(!deferTap)sfx("ui");
     }
   }
 }
@@ -1542,7 +1547,7 @@ function handleMobileTouchMove(e){
     }else if(action==="ui"){
       const dx=p.x-mobileInput.uiLastX,dy=p.y-mobileInput.uiLastY;mouseX=p.x;mouseY=p.y;
       const totalX=p.x-mobileInput.uiStartX,totalY=p.y-mobileInput.uiStartY;
-      if(Math.hypot(totalX,totalY)>9){
+      if(Math.hypot(totalX,totalY)>14){
         mobileInput.uiMoved=true;clicked=false;if(!mobileInput.uiAxis)mobileInput.uiAxis=Math.abs(totalX)>Math.abs(totalY)*1.15?"x":"y";
         if(gameMode==="operators"&&operatorPageMode==="list"){
           const order=executorOrder(),max=Math.max(0,order.length*212-12-(W-84)),step=mobileInput.uiAxis==="x"?-dx:-dy;operatorListScrollX=clamp(operatorListScrollX+step,0,max);
@@ -1565,8 +1570,8 @@ function handleMobileTouchEnd(e){
     if(action==="joystick"){mobileInput.joyId=null;clearMobileMoveKeys();}
     else if(action==="floraPending"){clearTimeout(mobileInput.floraWheel.timer);const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;attackBuffer=10;mobileInput.floraWheel.touchId=null;}
     else if(action==="floraWheel")closeFloraWheel(true);
-    else if(action.startsWith("button:")){if(action==="button:attack"&&mobileInput.activeButtons.attack!=="interact"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
-    else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t);if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);if(mobileInput.uiDeferredTap&&!mobileInput.uiMoved){mouseX=p.x;mouseY=p.y;clicked=true;sfx("ui");}mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mobileInput.uiAxis="";mobileInput.uiDeferredTap=false;mouseDown=false;mouseAttackConsumed=false;}
+    else if(action.startsWith("button:")){if(action==="button:attack"&&mobileInput.activeButtons.attack!=="interact"&&mobileInput.activeButtons.attack!=="parry"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
+    else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t),travel=Math.hypot(p.x-mobileInput.uiStartX,p.y-mobileInput.uiStartY),tapTime=performance.now()-mobileInput.uiStartAt;if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);if(mobileInput.uiDeferredTap&&!mobileInput.uiMoved&&travel<10&&tapTime<500){mouseX=p.x;mouseY=p.y;clicked=true;sfx("ui");}mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mobileInput.uiAxis="";mobileInput.uiDeferredTap=false;mouseDown=false;mouseAttackConsumed=false;}
     delete mobileInput.touchActions[t.identifier];
     delete mobileInput.touchPoints[t.identifier];
   }
@@ -20159,14 +20164,14 @@ function drawMobileControls(){
       ctx.globalAlpha=disabled&&!current?.38:1;ctx.fillStyle="rgba(6,11,22,.58)";ctx.beginPath();ctx.arc(b.x,b.y,current?28:b.r,0,Math.PI*2);ctx.fill();ctx.shadowColor=color;ctx.shadowBlur=current?15:0;ctx.strokeStyle=current?"#fff":color;ctx.lineWidth=current?3:1.5;ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle=color;ctx.beginPath();ctx.arc(b.x,b.y,current?17:15,0,Math.PI*2);ctx.fill();ctx.fillStyle="#07101c";ctx.font="bold 11px "+FONT_UI;ctx.fillText(valid?roleName(roleId).slice(0,1):String(b.slot+1),b.x,b.y);ctx.fillStyle="#fff";ctx.font="bold 8px Arial";ctx.fillText(String(b.slot+1),b.x+18,b.y+18);
       if(valid&&player.switchCd>0&&!current){ctx.globalAlpha=.72;ctx.fillStyle="rgba(0,0,0,.7)";ctx.beginPath();ctx.arc(b.x,b.y,b.r-2,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 9px Arial";ctx.fillText((player.switchCd/60).toFixed(1),b.x,b.y);}ctx.globalAlpha=1;continue;
     }
-    if(isFloraRole()&&((name==="attack"&&!b.interact)||name==="skill"||name==="ult"))continue;
+    if(usesMobileArcanaUI()&&((name==="attack"&&!b.interact&&!b.parry)||name==="skill"||name==="ult"))continue;
     if(chloeAttackCharge.active&&name!=="attack")continue;
     const active=!!mobileInput.activeButtons[name];
     const disabled=name==="skill"?player.skillCd>0||player.energy<SKILL_ENERGY_COST:name==="ult"?player.ultCd>0||player.ult<ULT_MAX:name==="dash"?player.dashCd>0:false;
     const color=mobileColors[b.kind]||mobileColors[name]||"#7cc7ff";ctx.globalAlpha=disabled?.42:1;ctx.shadowColor=color;ctx.shadowBlur=active?13:5;ctx.fillStyle=active?color:"rgba(7,12,23,.48)";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=active?"rgba(255,255,255,.92)":disabled?"rgba(255,255,255,.20)":color;ctx.lineWidth=active?3:2;ctx.stroke();ctx.strokeStyle="rgba(255,255,255,.10)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(b.x,b.y,b.r-6,0,Math.PI*2);ctx.stroke();ctx.fillStyle=disabled?"#8993a3":"#fff";ctx.font="bold "+(name==="attack"?17:11)+"px "+FONT_UI;ctx.fillText(b.label,b.x,b.y+(disabled?5:0));
     if(disabled){const cd=name==="skill"?player.skillCd:name==="ult"?player.ultCd:player.dashCd;ctx.font="bold 10px Arial";ctx.fillText(cd>0?(cd/60).toFixed(1)+"s":"—",b.x,b.y-13);}ctx.globalAlpha=1;
   }
-  if(isFloraRole()&&!mobileInput.floraWheel.open&&!buttons.attack.interact){ctx.fillStyle="rgba(220,190,255,.58)";ctx.font="bold 10px "+FONT_UI;ctx.fillText(language==="en"?"TAP: ATTACK  ·  HOLD: ARCANA":"点击普攻 · 长按法武",W-190,H-34);}
+  if(usesMobileArcanaUI()&&!mobileInput.floraWheel.open&&!buttons.attack.interact&&!buttons.attack.parry){ctx.fillStyle="rgba(220,190,255,.58)";ctx.font="bold 10px "+FONT_UI;ctx.fillText(language==="en"?"TAP: ATTACK  ·  HOLD: ARCANA":"点击普攻 · 长按法武",W-190,H-34);}
   const fw=mobileInput.floraWheel;
   if(fw.open){
     ctx.save();ctx.fillStyle="rgba(2,4,12,.42)";ctx.fillRect(0,0,W,H);ctx.shadowColor="#c787ff";ctx.shadowBlur=26;ctx.fillStyle="rgba(12,8,28,.94)";ctx.beginPath();ctx.arc(fw.x,fw.y,138,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
@@ -20293,7 +20298,7 @@ function drawCommonMissionPause(labels,title,subtitle=""){
 }
 
 function drawBattleUI(){
-  if(shouldShowMobileControls()){drawMobileBattleStatus();return;}
+  if(shouldShowMobileControls()&&!chainSelect){drawMobileBattleStatus();return;}
   if(battleModeSource==="daydream"){drawDaydreamBattleUI();return;}
   syncPlayerHpFromRole();
   const r=roles[player.role];
@@ -20345,8 +20350,8 @@ function drawBattleUI(){
     ctx.textAlign="center";ctx.fillStyle="#ffe066";ctx.font="bold 17px "+FONT_UI;
     ctx.fillText(language==="en"?`CHAIN DECISION  ${seconds}s`:`连携选择  ${seconds}秒`,W/2,H-154);
     ctx.fillStyle="rgba(255,255,255,.68)";ctx.font="12px "+FONT_UI;
-    ctx.fillText(language==="en"?"Other keys cancel · timeout ends automatically":"按其他键取消 · 超时自动结束",W/2,H-132);
-    partners.slice(0,2).forEach((roleId,i)=>{const x=W/2-230+i*240;ctx.fillStyle="rgba(255,255,255,.07)";ctx.fillRect(x,H-119,220,62);ctx.strokeStyle=roles[roleId].color;ctx.strokeRect(x,H-119,220,62);ctx.fillStyle=roles[roleId].color;ctx.font="bold 16px "+FONT_UI;fitText((i===0?(language==="en"?"LEFT · ":"左键 · "):(language==="en"?"RIGHT · ":"右键 · "))+roleName(roleId),190,16,"bold",11);ctx.fillText((i===0?(language==="en"?"LEFT · ":"左键 · "):(language==="en"?"RIGHT · ":"右键 · "))+roleName(roleId),x+110,H-82);});
+    ctx.fillText(mobileInput.enabled?(language==="en"?"Tap the left or right side to choose":"点击屏幕左侧或右侧选择"):(language==="en"?"Other keys cancel · timeout ends automatically":"按其他键取消 · 超时自动结束"),W/2,H-132);
+    partners.slice(0,2).forEach((roleId,i)=>{const x=W/2-230+i*240,prefix=mobileInput.enabled?(i===0?(language==="en"?"TAP LEFT · ":"点左侧 · "):(language==="en"?"TAP RIGHT · ":"点右侧 · ")):(i===0?(language==="en"?"LEFT · ":"左键 · "):(language==="en"?"RIGHT · ":"右键 · "));ctx.fillStyle="rgba(255,255,255,.07)";ctx.fillRect(x,H-119,220,62);ctx.strokeStyle=roles[roleId].color;ctx.strokeRect(x,H-119,220,62);ctx.fillStyle=roles[roleId].color;ctx.font="bold 16px "+FONT_UI;fitText(prefix+roleName(roleId),190,16,"bold",11);ctx.fillText(prefix+roleName(roleId),x+110,H-82);});
   }
 
   drawBar(30,78,280,12,player.hp/playerMaxHp(),"#ff4d4d");
