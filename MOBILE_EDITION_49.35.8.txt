@@ -1,0 +1,4 @@
+Project Zero Mobile V49.35.8
+Build: 2026091207-mobile-home-screen-client-fix
+
+Independent Mobile edition. PC/Web source is not modified.

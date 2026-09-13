@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_7_MOBILE_IMMERSIVE_UI_FIX",
+  build: "V49_35_8_MOBILE_HOME_SCREEN_CLIENT_FIX",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -1288,16 +1288,22 @@ const mobileInput = {
   touchPoints:{},crystalPinch:{active:false,ids:[],distance:0}
 };
 
-const mobileMotion={x:0,y:0,hasData:false,requested:false};
+const mobileMotion={x:0,y:0,hasData:false,requested:false,baseBeta:null,baseGamma:null};
 const mobileBattery={level:null,charging:false,supported:false};
 const mobileViewport={width:0,height:0,orientation:"",keyboardOpen:false};
 const mobileImmersive={requested:false,fullscreen:false,orientationLocked:false};
+function isInstalledMobileApp(){return !!(navigator.standalone||window.matchMedia?.("(display-mode: standalone)").matches||window.matchMedia?.("(display-mode: fullscreen)").matches||document.referrer.startsWith("android-app://"));}
 
 function initMobileDeviceSignals(){
   window.addEventListener("deviceorientation",e=>{
     if(!mobileInput.enabled||!Number.isFinite(e.gamma)||!Number.isFinite(e.beta))return;
-    mobileMotion.x=clamp(e.gamma/18,-1,1);mobileMotion.y=clamp((e.beta-45)/24,-1,1);mobileMotion.hasData=true;
+    if(mobileMotion.baseBeta===null||mobileMotion.baseGamma===null){mobileMotion.baseBeta=e.beta;mobileMotion.baseGamma=e.gamma;return;}
+    const db=e.beta-mobileMotion.baseBeta,dg=e.gamma-mobileMotion.baseGamma,angle=Number(screen.orientation?.angle??window.orientation??0);
+    const tx=Math.abs(angle)===90?clamp((angle>0?db:-db)/14,-1,1):clamp(dg/14,-1,1);
+    const ty=Math.abs(angle)===90?clamp(dg/14,-1,1):clamp(db/14,-1,1);
+    mobileMotion.x+=(tx-mobileMotion.x)*.16;mobileMotion.y+=(ty-mobileMotion.y)*.16;mobileMotion.hasData=true;
   },{passive:true});
+  window.addEventListener("orientationchange",()=>{mobileMotion.baseBeta=null;mobileMotion.baseGamma=null;mobileMotion.x=0;mobileMotion.y=0;mobileMotion.hasData=false;},{passive:true});
   if(navigator.getBattery)navigator.getBattery().then(b=>{
     const sync=()=>{mobileBattery.supported=true;mobileBattery.level=clamp(b.level,0,1);mobileBattery.charging=!!b.charging;};sync();
     b.addEventListener("levelchange",sync);b.addEventListener("chargingchange",sync);
@@ -1305,7 +1311,7 @@ function initMobileDeviceSignals(){
 }
 
 function requestMobileImmersiveLandscape(){
-  if(!mobileInput.enabled)return;
+  if(!mobileInput.enabled||!isInstalledMobileApp())return;
   const lock=()=>{try{const p=screen.orientation?.lock?.("landscape");if(p&&typeof p.then==="function")p.then(()=>{mobileImmersive.orientationLocked=true;}).catch(()=>{});}catch(_){} };
   if(document.fullscreenElement||document.webkitFullscreenElement){mobileImmersive.fullscreen=true;lock();return;}
   if(mobileImmersive.requested){lock();return;}mobileImmersive.requested=true;
@@ -1493,7 +1499,7 @@ function clearMobileMoveKeys(){
 
 function handleMobileTouchStart(e){
   if(!mobileInput.enabled)return;
-  e.preventDefault();requestMobileImmersiveLandscape();unlockAudio();mobileInput.ignoreMouseUntil=performance.now()+800;
+  e.preventDefault();requestMobileImmersiveLandscape();requestMobileMotionPermission();unlockAudio();mobileInput.ignoreMouseUntil=performance.now()+800;
   for(const t of e.changedTouches)mobileInput.touchPoints[t.identifier]=canvasPointFromTouch(t);
   const pointEntries=Object.entries(mobileInput.touchPoints);
   if(gameMode==="operation"&&selectedTab==="dualCrystal"&&pointEntries.length>=2){
@@ -1510,7 +1516,6 @@ function handleMobileTouchStart(e){
       if(bootSkipReady||(performance.now()-bootStartTime)>900){gameMode=bootNextMode||"login";if(gameMode==="login")requestLoginBgmPlay();}
       mobileInput.touchActions[t.identifier]="boot";continue;
     }
-    if(gameMode==="lobby")requestMobileMotionPermission();
     if(tryOpenMobileNativeKeyboardAt(p)){mobileInput.touchActions[t.identifier]="keyboard";continue;}
     if(tryOpenMobileSupportLinkAt(p)){mobileInput.touchActions[t.identifier]="externalLink";clicked=false;mouseDown=false;continue;}
     if(gameMode==="tutorialBattle"&&tutorialPanelActive){
@@ -20315,15 +20320,13 @@ function restartCurrentBattle(){
 function updateBattlePauseMenu(){
   if(justPressed("escape")){battlePaused=false;clicked=false;return;}
   if(clicked){
-    const r=mobilePauseLayout();
-    if(inRect(r.x,r.y,r.w,r.h)){battlePaused=false;clicked=false;return;}
-    if(inRect(r.x,r.y+r.gap,r.w,r.h)){clicked=false;restartCurrentBattle();return;}
-    if(inRect(r.x,r.y+r.gap*2,r.w,r.h)){clicked=false;abandonCurrentBattle();return;}
+    const x=W/2-170,y=H/2-78;
+    if(inRect(x,y,340,54)){battlePaused=false;clicked=false;return;}
+    if(inRect(x,y+68,340,54)){clicked=false;restartCurrentBattle();return;}
+    if(inRect(x,y+136,340,54)){clicked=false;abandonCurrentBattle();return;}
   }
   clicked=false;
 }
-
-function mobilePauseLayout(){return mobileInput.enabled?{x:W/2-260,y:H/2-105,w:520,h:64,gap:78}:{x:W/2-170,y:H/2-78,w:340,h:54,gap:68};}
 
 function drawBattlePauseButton(){
   const hover=inRect(W-72,18,50,44);
@@ -20337,10 +20340,8 @@ function drawBattlePauseMenu(){
   const labels=battleModeSource==="showcase"
     ? (language==="en"?["Continue","Reset Template","Exit Showcase"]:["继续展示","重置模板","退出展示"])
     : (language==="en"?["Continue","Restart Mission","Abandon Mission"]:["继续任务","重新开始","放弃任务"]);
-  if(mobileInput.enabled)drawMobileMissionPause(labels);else drawCommonMissionPause(labels,language==="en"?"MISSION PAUSED":"任务暂停");
+  drawCommonMissionPause(labels,language==="en"?"MISSION PAUSED":"任务暂停");
 }
-
-function drawMobileMissionPause(labels){const r=mobilePauseLayout();ctx.save();ctx.fillStyle="rgba(1,4,12,.82)";ctx.fillRect(0,0,W,H);const px=r.x-32,py=70,pw=r.w+64,ph=500,g=ctx.createLinearGradient(px,py,px+pw,py+ph);g.addColorStop(0,"rgba(10,25,43,.98)");g.addColorStop(1,"rgba(5,8,18,.99)");ctx.beginPath();ctx.roundRect(px,py,pw,ph,20);ctx.fillStyle=g;ctx.fill();ctx.strokeStyle="rgba(124,199,255,.58)";ctx.lineWidth=2;ctx.stroke();ctx.fillStyle="#7cc7ff";ctx.fillRect(px,py,7,ph);ctx.textAlign="center";ctx.fillStyle="rgba(255,255,255,.46)";ctx.font="bold 11px "+FONT_UI;ctx.fillText("PROJECT ZERO / MOBILE",W/2,112);ctx.fillStyle="#fff";ctx.font="bold 30px "+FONT_UI;ctx.fillText(language==="en"?"MISSION PAUSED":"行动暂停",W/2,151);for(let i=0;i<3;i++){const y=r.y+r.gap*i,accent=i===2?"#ff7886":"#7cc7ff",hover=inRect(r.x,y,r.w,r.h);ctx.beginPath();ctx.roundRect(r.x,y,r.w,r.h,12);ctx.fillStyle=hover?(i===2?"rgba(255,90,110,.22)":"rgba(124,199,255,.20)"):"rgba(255,255,255,.055)";ctx.fill();ctx.strokeStyle=hover?accent:"rgba(255,255,255,.20)";ctx.lineWidth=hover?2:1;ctx.stroke();ctx.fillStyle=i===2?"#ff8b96":"#fff";ctx.font="bold 18px "+FONT_UI;ctx.fillText(labels[i],W/2,y+40);}ctx.fillStyle="rgba(255,255,255,.42)";ctx.font="11px "+FONT_UI;ctx.fillText(language==="en"?"Tap an option to continue":"点击选项继续",W/2,py+ph-24);ctx.restore();}
 
 function drawCommonMissionPause(labels,title,subtitle=""){
   ctx.save();ctx.fillStyle="rgba(0,0,0,.76)";ctx.fillRect(0,0,W,H);
