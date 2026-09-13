@@ -1,0 +1,4 @@
+Project Zero Mobile V49.35.7
+Build: 2026091206-mobile-immersive-ui-fix
+
+Independent Mobile edition. PC/Web source is not modified.
