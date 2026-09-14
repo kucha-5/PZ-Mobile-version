@@ -3,7 +3,7 @@
 
   const VERSION_URL="version.json";
   const LOCAL_VERSION="49.35.7";
-  const LOCAL_BUILD="2026091401-mobile-github-1825-ailo";
+  const LOCAL_BUILD="2026091402-mobile-home-screen-gate";
   const FILE_RUNTIME=location.protocol==="file:";
   const BUILD_KEY="pz_runtime_build";
   const VERSION_KEY="pz_runtime_version";
@@ -34,6 +34,37 @@
   const actions=document.getElementById("bootActions");
   const retryButton=document.getElementById("bootRetry");
   const resetButton=document.getElementById("bootReset");
+  const installGate=document.getElementById("installGate");
+  const installSteps=document.getElementById("installSteps");
+  const installButton=document.getElementById("installAppButton");
+  let deferredInstallPrompt=null;
+
+  function mobileBrowserNeedsInstall(){
+    const mobile=navigator.maxTouchPoints>0&&((window.matchMedia&&window.matchMedia("(pointer: coarse)").matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
+    const installed=!!(navigator.standalone||window.matchMedia?.("(display-mode: standalone)").matches||window.matchMedia?.("(display-mode: fullscreen)").matches||document.referrer.startsWith("android-app://"));
+    return mobile&&!installed&&!FILE_RUNTIME;
+  }
+  function showInstallGate(){
+    if(screen)screen.hidden=true;
+    if(installGate)installGate.hidden=false;
+    if(installSteps)installSteps.innerHTML='<div class="install-step"><b>1</b>打开浏览器的分享菜单或功能菜单</div><div class="install-step"><b>2</b>选择“添加到主屏幕”或“安装应用”</div><div class="install-step"><b>3</b>返回主屏幕，点击 PZ Mobile 图标启动</div>';
+    if(installButton){
+      installButton.onclick=async()=>{
+        if(deferredInstallPrompt){
+          deferredInstallPrompt.prompt();
+          try{await deferredInstallPrompt.userChoice;}catch(_){}
+          deferredInstallPrompt=null;
+        }else{
+          installButton.textContent='请在浏览器菜单中选择“添加到主屏幕”';
+          installButton.classList.add("install-manual");
+        }
+      };
+    }
+  }
+  window.addEventListener("beforeinstallprompt",event=>{
+    event.preventDefault();deferredInstallPrompt=event;
+    if(installButton){installButton.textContent="添加到主屏幕";installButton.classList.remove("install-manual");}
+  });
 
   const setStatus=(text,state="")=>{
     if(status) status.textContent=text;
@@ -226,5 +257,5 @@
     location.reload();
   });
 
-  start();
+  if(mobileBrowserNeedsInstall())showInstallGate();else start();
 })();

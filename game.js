@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_7_MOBILE_GITHUB_1825_AILO",
+  build: "V49_35_7_MOBILE_HOME_SCREEN_GATE",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -1294,7 +1294,7 @@ const mobileInput = {
   touchPoints:{},crystalPinch:{active:false,ids:[],distance:0}
 };
 
-const mobileMotion={x:0,y:0,hasData:false,requested:false};
+const mobileMotion={x:0,y:0,hasData:false,requested:false,baseBeta:null,baseGamma:null};
 const mobileBattery={level:null,charging:false,supported:false};
 const mobileViewport={width:0,height:0,orientation:"",keyboardOpen:false};
 const mobileImmersive={requested:false,fullscreen:false,orientationLocked:false};
@@ -1302,16 +1302,23 @@ const mobileImmersive={requested:false,fullscreen:false,orientationLocked:false}
 function initMobileDeviceSignals(){
   window.addEventListener("deviceorientation",e=>{
     if(!mobileInput.enabled||!Number.isFinite(e.gamma)||!Number.isFinite(e.beta))return;
-    mobileMotion.x=clamp(e.gamma/18,-1,1);mobileMotion.y=clamp((e.beta-45)/24,-1,1);mobileMotion.hasData=true;
+    if(mobileMotion.baseBeta===null||mobileMotion.baseGamma===null){mobileMotion.baseBeta=e.beta;mobileMotion.baseGamma=e.gamma;return;}
+    const db=e.beta-mobileMotion.baseBeta,dg=e.gamma-mobileMotion.baseGamma,angle=Number(screen.orientation?.angle??window.orientation??0);
+    const tx=Math.abs(angle)===90?clamp((angle>0?db:-db)/14,-1,1):clamp(dg/14,-1,1);
+    const ty=Math.abs(angle)===90?clamp(dg/14,-1,1):clamp(db/14,-1,1);
+    mobileMotion.x+=(tx-mobileMotion.x)*.16;mobileMotion.y+=(ty-mobileMotion.y)*.16;mobileMotion.hasData=true;
   },{passive:true});
+  window.addEventListener("orientationchange",()=>{mobileMotion.baseBeta=null;mobileMotion.baseGamma=null;mobileMotion.x=0;mobileMotion.y=0;mobileMotion.hasData=false;},{passive:true});
   if(navigator.getBattery)navigator.getBattery().then(b=>{
     const sync=()=>{mobileBattery.supported=true;mobileBattery.level=clamp(b.level,0,1);mobileBattery.charging=!!b.charging;};sync();
     b.addEventListener("levelchange",sync);b.addEventListener("chargingchange",sync);
   }).catch(()=>{});
 }
 
+function isInstalledMobileApp(){return !!(navigator.standalone||window.matchMedia?.("(display-mode: standalone)").matches||window.matchMedia?.("(display-mode: fullscreen)").matches||document.referrer.startsWith("android-app://"));}
+
 function requestMobileImmersiveLandscape(){
-  if(!mobileInput.enabled)return;
+  if(!mobileInput.enabled||!isInstalledMobileApp())return;
   const lock=()=>{try{const p=screen.orientation?.lock?.("landscape");if(p&&typeof p.then==="function")p.then(()=>{mobileImmersive.orientationLocked=true;}).catch(()=>{});}catch(_){} };
   if(document.fullscreenElement||document.webkitFullscreenElement){mobileImmersive.fullscreen=true;lock();return;}
   if(mobileImmersive.requested){lock();return;}mobileImmersive.requested=true;
