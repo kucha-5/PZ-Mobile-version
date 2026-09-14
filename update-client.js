@@ -2,8 +2,8 @@
   "use strict";
 
   const VERSION_URL="version.json";
-  const LOCAL_VERSION="49.33.2";
-  const LOCAL_BUILD="2026091302-pc-ailo-portrait-tuning";
+  const LOCAL_VERSION="49.35.7";
+  const LOCAL_BUILD="2026091401-mobile-github-1825-ailo";
   const FILE_RUNTIME=location.protocol==="file:";
   const BUILD_KEY="pz_runtime_build";
   const VERSION_KEY="pz_runtime_version";
