@@ -1,12 +1,13 @@
 {
   "version": "49.35.7",
-  "build": "2026091402-mobile-home-screen-gate",
+  "build": "2026091403-mobile-training-weapon-art",
   "edition": "mobile",
   "publishedAt": "2026-08-29T12:00:00Z",
   "mandatory": false,
   "minimumLauncherVersion": "1.0.0",
   "saveSchemaVersion": 80,
   "changelog": [
+    "接入训练剑、训练弓、训练枪械、训练盾与训练法器五张原始透明PNG；艾洛默认改用训练弓，训练枪械加入常驻武器库但不绑定现有角色",
     "手机普通浏览器仅显示添加到主屏幕引导；从主屏幕启动后请求沉浸式全屏与横屏，并使用校准后的设备方向驱动轻微UI视差",
     "安装引导统一使用“浏览器”称呼，不显示具体浏览器名称，避免不同设备用户受到误导",
     "以GitHub提交e83d37d5ad68（2026-09-12 18:25 PDT）的Mobile 49.35.7为基线，接入艾洛透明PNG并分别调整大厅、执行官与常驻招募立绘比例",

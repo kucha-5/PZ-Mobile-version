@@ -3,7 +3,7 @@
 
   const VERSION_URL="version.json";
   const LOCAL_VERSION="49.35.7";
-  const LOCAL_BUILD="2026091402-mobile-home-screen-gate";
+  const LOCAL_BUILD="2026091403-mobile-training-weapon-art";
   const FILE_RUNTIME=location.protocol==="file:";
   const BUILD_KEY="pz_runtime_build";
   const VERSION_KEY="pz_runtime_version";

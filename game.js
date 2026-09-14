@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_7_MOBILE_HOME_SCREEN_GATE",
+  build: "V49_35_7_MOBILE_TRAINING_WEAPON_ART",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -63,6 +63,10 @@ setPzImageSource(ailoPortraitImg,"assets/ui/ailo_portrait_display.png");
 let ailoPortraitReady = false;
 ailoPortraitImg.onload = () => { ailoPortraitReady = true; };
 queueMicrotask(()=>{if(ailoPortraitImg.complete&&ailoPortraitImg.naturalWidth)ailoPortraitReady=true;});
+const trainingWeaponImgs={};
+for(const [type,file] of Object.entries({sword:"training_weapon_sword.png",bow:"training_weapon_bow.png",gun:"training_weapon_gun.png",shield:"training_weapon_shield.png",codex:"training_weapon_codex.png"})){
+  const img=new Image();setPzImageSource(img,"assets/ui/"+file);trainingWeaponImgs[type]=img;
+}
 const crystalCurrencyImg = new Image();
 setPzImageSource(crystalCurrencyImg,"assets/ui/currency_crystal.png");
 let crystalCurrencyReady = false;
@@ -3613,7 +3617,7 @@ function resetRuntimeDefaults(){
     ultimate:1,
     weaponLevel:1,
     weapon:["训练剑","训练长枪","训练双刃","训练法器","灰白核心刃","训练法器","训练盾"][i],
-    equippedWeaponId:["training_sword","training_spear","training_dual","training_codex","gray_core_blade","training_codex","training_shield"][i]
+    equippedWeaponId:["training_sword","training_bow","training_dual","training_codex","gray_core_blade","training_codex","training_shield"][i]
   }));
 
   ownedWeapons = {flora:false};
@@ -3661,7 +3665,7 @@ function resetRuntimeDefaults(){
   skillBooks = 6;
   skillMaterials = {normal:6,skill:4,ultimate:2};
   owned = [true,true,false,false,true,false,false];
-  charData = roles.map((r,i)=>({level:1,breakStage:0,skillPoints:0,normal:1,skill:1,ultimate:1,weaponLevel:1,weapon:["训练剑","训练长枪","训练双刃","训练法器","灰白核心刃","训练法器","训练盾"][i],equippedWeaponId:["training_sword","training_spear","training_dual","training_codex","gray_core_blade","training_codex","training_shield"][i]}));
+  charData = roles.map((r,i)=>({level:1,breakStage:0,skillPoints:0,normal:1,skill:1,ultimate:1,weaponLevel:1,weapon:["训练剑","训练弓","训练双刃","训练法器","灰白核心刃","训练法器","训练盾"][i],equippedWeaponId:["training_sword","training_bow","training_dual","training_codex","gray_core_blade","training_codex","training_shield"][i]}));
   cleared = {};
   achievements = {};
   totalKills = 0; totalParries = 0; totalChains = 0; totalBossKills = 0;
@@ -19240,6 +19244,8 @@ function upgradeWeaponSelected(i){
 
 const WEAPON_MASTER=[
   {id:"training_sword",nameZh:"训练剑",nameEn:"Training Sword",rarity:"B",type:"sword",baseAtk:60,crit:0,passiveZh:"训练用单手剑",passiveEn:"Training sword"},
+  {id:"training_bow",nameZh:"训练弓",nameEn:"Training Bow",rarity:"B",type:"bow",baseAtk:58,crit:1,passiveZh:"标准训练弓，艾洛获得时默认装备。",passiveEn:"Standard training bow; Ailo's default weapon.",price:0},
+  {id:"training_gun",nameZh:"训练枪械",nameEn:"Training Firearm",rarity:"B",type:"gun",baseAtk:62,crit:2,passiveZh:"为未来枪械执行官准备的标准训练武器。",passiveEn:"Standard training firearm reserved for future firearm operators.",price:450},
   {id:"training_spear",nameZh:"训练长枪",nameEn:"Training Spear",rarity:"B",type:"spear",baseAtk:58,crit:0,passiveZh:"标准训练长枪。",passiveEn:"Standard training spear.",price:0},
   {id:"training_dual",nameZh:"训练双刃",nameEn:"Training Dual Blades",rarity:"B",type:"dual",baseAtk:56,crit:1,passiveZh:"标准训练双刃。",passiveEn:"Standard training dual blades.",price:0},
   {id:"training_codex",nameZh:"训练法器",nameEn:"Training Codex",rarity:"B",type:"codex",baseAtk:54,crit:0,passiveZh:"标准训练法器。",passiveEn:"Standard training catalyst.",price:0},
@@ -19260,7 +19266,7 @@ function permanentWeaponCatalog(){return WEAPON_MASTER.filter(w=>!w.limited);}
 function roleWeaponType(i){
   if(isProtagonist(i)) return "core";
   if(i===0) return "sword";
-  if(i===1) return "spear";
+  if(i===1) return "bow";
   if(i===2) return "dual";
   if(i===3) return "codex";
   if(i===5) return "codex";
@@ -19268,8 +19274,8 @@ function roleWeaponType(i){
   return "sword";
 }
 function weaponTypeLabel(type){
-  const zh={sword:"单手剑",codex:"法器",dual:"双刃",spear:"长枪",shield:"盾武",core:"专武"};
-  const en={sword:"Sword",codex:"Codex",dual:"Dual Blades",spear:"Spear",shield:"Shield",core:"Exclusive"};
+  const zh={sword:"单手剑",bow:"弓",gun:"枪械",codex:"法器",dual:"双刃",spear:"长枪",shield:"盾武",core:"专武"};
+  const en={sword:"Sword",bow:"Bow",gun:"Firearm",codex:"Codex",dual:"Dual Blades",spear:"Spear",shield:"Shield",core:"Exclusive"};
   return (language==="en"?en:zh)[type]||type;
 }
 function weaponData(id){ return WEAPON_MASTER.find(w=>w.id===id)||WEAPON_MASTER[0]; }
@@ -19279,7 +19285,7 @@ function weaponNameById(id){
 }
 function defaultWeaponIdForRole(i){
   if(i===0) return "training_sword";
-  if(i===1) return "training_spear";
+  if(i===1) return "training_bow";
   if(i===2) return "training_dual";
   if(i===3 || i===5) return "training_codex";
   if(i===6) return "training_shield";
@@ -19302,6 +19308,7 @@ function ensureWeaponBag(){
   if(created)weaponLevelMigrationDone=false;
   for(let i=0;i<charData.length;i++){
     if(!charData[i]) continue;
+    if(i===1&&charData[i].equippedWeaponId==="training_spear")charData[i].equippedWeaponId="training_bow";
     if(!charData[i].equippedWeaponId) charData[i].equippedWeaponId=defaultWeaponIdForRole(i);
     const equippedItem=weaponInventory.find(w=>w.id===charData[i].equippedWeaponId);
     if(equippedItem){
@@ -19548,7 +19555,15 @@ function drawLimitedRecruitShowcase(){
   ctx.fillStyle="rgba(0,0,0,.68)";ctx.fillRect(vx,vy+vh-25,vw,25);ctx.fillStyle="#bfe8ff";ctx.font="bold 10px "+FONT_UI;ctx.textAlign="center";ctx.fillText(scroll<max-4?(language==="en"?"MOUSE WHEEL ↓  VIEW ACCESS DETAILS":"鼠标滚轮向下 · 查看获取详情"):(language==="en"?"DIRECT PURCHASE · NOT A GACHA":"定向直购 · 不是抽卡"),vx+vw/2,vy+vh-8);
 }
 
-function drawArmoryWeaponIcon(type,x,y,scale=1,color="#dbe8ff"){
+function drawTrainingWeaponArt(type,x,y,scale=1,color="#dbe8ff"){
+  const img=trainingWeaponImgs[type],boxes={sword:[769,73,791,1516],bow:[818,167,932,1473],gun:[570,460,1080,819],shield:[741,217,824,859],codex:[632,239,1053,972]},box=boxes[type];
+  if(!img||!img.complete||!img.naturalWidth||!box)return false;
+  const size=122*scale,fit=Math.min(size/box[2],size/box[3]),dw=box[2]*fit,dh=box[3]*fit;
+  ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";ctx.shadowColor=color;ctx.shadowBlur=12*scale;
+  ctx.drawImage(img,box[0],box[1],box[2],box[3],x-dw/2,y-dh/2,dw,dh);ctx.restore();return true;
+}
+function drawArmoryWeaponIcon(type,x,y,scale=1,color="#dbe8ff",weaponId=""){
+  if(String(weaponId).startsWith("training_")&&drawTrainingWeaponArt(type,x,y,scale,color))return;
   ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.lineCap="round";ctx.lineJoin="round";
   ctx.shadowColor=color;ctx.shadowBlur=10;ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=7;
   if(type==="codex"){
@@ -19593,7 +19608,7 @@ function drawShopWeaponArmory(){
   ctx.fillStyle="rgba(8,12,20,.84)";ctx.fillRect(x,y,w,112);
   ctx.strokeStyle="rgba(255,255,255,.16)";ctx.strokeRect(x,y,w,112);
   ctx.fillStyle=selected.rarity==="S"?"#ffe066":"#7cc7ff";ctx.fillRect(x,y,6,112);
-  drawArmoryWeaponIcon(selected.type,x+170,y+57,.72,selected.rarity==="S"?"#ffe066":"#7cc7ff");
+  drawArmoryWeaponIcon(selected.type,x+170,y+57,.72,selected.rarity==="S"?"#ffe066":"#7cc7ff",selected.id);
   ctx.textAlign="left";ctx.fillStyle="rgba(255,255,255,.46)";ctx.font="bold 10px "+FONT_UI;ctx.fillText(language==="en"?"PERMANENT ARMORY":"常驻武器库",x+270,y+27);
   ctx.fillStyle="#fff";ctx.font="bold 25px "+FONT_UI;ctx.fillText(language==="en"?selected.nameEn:selected.nameZh,x+270,y+58);
   ctx.fillStyle="rgba(255,255,255,.64)";ctx.font="12px "+FONT_UI;ctx.fillText(weaponTypeLabel(selected.type)+"  ·  ATK "+selected.baseAtk+"  ·  CRIT "+selected.crit+"%",x+270,y+82);
@@ -19608,7 +19623,7 @@ function drawShopWeaponArmory(){
     ctx.fillStyle=active?"rgba(124,199,255,.14)":"rgba(255,255,255,.055)";ctx.fillRect(cx,cy,cw,ch);
     ctx.strokeStyle=active?"#7cc7ff":"rgba(255,255,255,.13)";ctx.lineWidth=active?2:1;ctx.strokeRect(cx,cy,cw,ch);
     ctx.fillStyle=wd.rarity==="S"?"#ffe066":"#7cc7ff";ctx.fillRect(cx,cy,4,ch);
-    drawArmoryWeaponIcon(wd.type,cx+39,cy+29,.28,wd.rarity==="S"?"#ffe066":"#7cc7ff");
+    drawArmoryWeaponIcon(wd.type,cx+39,cy+29,.28,wd.rarity==="S"?"#ffe066":"#7cc7ff",wd.id);
     ctx.textAlign="left";ctx.fillStyle="#fff";ctx.font="bold 11px "+FONT_UI;ctx.fillText(language==="en"?wd.nameEn:wd.nameZh,cx+73,cy+22);
     ctx.fillStyle="rgba(255,255,255,.50)";ctx.font="9px "+FONT_UI;ctx.fillText(weaponTypeLabel(wd.type)+" · ATK "+wd.baseAtk,cx+73,cy+39);
     ctx.textAlign="right";ctx.fillStyle=owned?"#7cc7ff":"#777";ctx.fillText(owned?(language==="en"?"OWNED":"已拥有"):(language==="en"?"LOCK":"未获得"),cx+cw-10,cy+50);

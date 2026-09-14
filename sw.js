@@ -10,6 +10,7 @@ const CORE_FILES=[
   "./story_chapter2_zh.js","./story_chapter2_en.js","./story_chapter3_zh.js","./story_chapter3_en.js","./story_expansion_v49322.js","./game_crystal_modules.js","./game.js",
   "./game_match3.js","./game_quality_update.js","./game_patrol.js","./game_side_story.js","./game_daydream.js","./game_daydream_title.js","./game_crystal_war.js",
   "./assets/ui/project_zero_logo.png","./assets/ui/pz_cursor.png","./assets/ui/lobby_background.png","./assets/ui/kane_portrait.png","./assets/ui/ailo_portrait_display.png",
+  "./assets/ui/training_weapon_sword.png","./assets/ui/training_weapon_bow.png","./assets/ui/training_weapon_gun.png","./assets/ui/training_weapon_shield.png","./assets/ui/training_weapon_codex.png",
   "./assets/ui/hermit_portrait.png","./assets/ui/hermit_portrait_display.png","./assets/ui/flora_portrait_display.png","./assets/ui/flora_portrait_executor.png",
   "./assets/ui/currency_crystal.png","./assets/ui/currency_gold.png","./assets/ui/currency_stamina.png","./assets/ui/crystal_topup_400.png",
   "./assets/ui/crystal_topup_1080.png","./assets/ui/crystal_topup_2980.png","./assets/ui/crystal_topup_5280.png","./assets/ui/crystal_topup_7480.png","./assets/audio/bgm/login_theme.mp3",
