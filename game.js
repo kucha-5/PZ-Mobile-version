@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_7_MOBILE_STORY_TOUCH_INSTALL_LOCALE",
+  build: "V49_35_7_MOBILE_GUEST_ENTRY_ICON",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -9593,7 +9593,7 @@ function updateLogin(){
       else if(!initCloudSave()) setAccountMsg(language==="en"?"Account service is unavailable.":"账号服务暂时不可用。",180);
       else setAccountMsg(language==="en"?"Password reset will be added to SF Account soon.":"SF Account 密码重置功能将在后续接入。",240);
     }
-    else if(inRect(W/2-120,H-58,240,40)){
+    else if(inRect(W/2-126,H-59,252,43)){
       accountGuestFlow();
     }
   }
@@ -13582,6 +13582,23 @@ function drawGuestCloudOverwritePrompt(){
   drawBtn(tr("取消","Cancel"),"ESC",W/2+10,H/2+95,165,48,false,"#9aa7bd");
 }
 
+function drawGuestEntry(){
+  const x=W/2-126,y=H-59,w=252,h=43,hover=inRect(x,y,w,h);
+  ctx.save();
+  ctx.fillStyle=hover?"rgba(124,199,255,.18)":"rgba(124,199,255,.09)";
+  ctx.strokeStyle=hover?"rgba(124,199,255,.78)":"rgba(124,199,255,.42)";
+  ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(x,y,w,h,21);ctx.fill();ctx.stroke();
+  const cx=x+34,cy=y+h/2;
+  ctx.shadowColor="#7cc7ff";ctx.shadowBlur=hover?11:5;
+  ctx.strokeStyle="#a7dcff";ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.arc(cx,cy,15,0,Math.PI*2);ctx.stroke();
+  ctx.shadowBlur=0;ctx.fillStyle="#bce7ff";
+  ctx.beginPath();ctx.arc(cx,cy-5,4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx,cy+6,7,Math.PI,0);ctx.fill();
+  ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle="#dceeff";
+  ctx.font="bold 14px "+FONT_UI;ctx.fillText(accTx("guest"),x+145,cy);
+  ctx.restore();
+}
 function drawLogin(){
   const bg = ctx.createLinearGradient(0,0,0,H);
   bg.addColorStop(0,"#070a16");
@@ -13742,9 +13759,7 @@ function drawLogin(){
   ctx.fillStyle="rgba(255,255,255,.58)";
   ctx.font="14px " + FONT_UI;
   ctx.fillText(accountMsg || cloudSyncStatus || "Salt Fish Studio", W/2, H-70);
-  ctx.fillStyle="rgba(255,255,255,.36)";
-  ctx.font="12px " + FONT_UI;
-  ctx.fillText(accTx("guest"), W/2, H-38);
+  drawGuestEntry();
   if(guestCloudOverwritePromptActive)drawGuestCloudOverwritePrompt();
 }
 

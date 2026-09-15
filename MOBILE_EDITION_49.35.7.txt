@@ -1,4 +1,4 @@
 Project Zero Mobile V49.35.7
-Build: 2026091502-mobile-story-touch-install-locale
+Build: 2026091503-mobile-guest-entry-icon
 
 Independent Mobile edition. PC/Web source is not modified.

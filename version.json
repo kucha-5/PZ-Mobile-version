@@ -1,12 +1,13 @@
 {
   "version": "49.35.7",
-  "build": "2026091502-mobile-story-touch-install-locale",
+  "build": "2026091503-mobile-guest-entry-icon",
   "edition": "mobile",
   "publishedAt": "2026-08-29T12:00:00Z",
   "mandatory": false,
   "minimumLauncherVersion": "1.0.0",
   "saveSchemaVersion": 80,
   "changelog": [
+    "手机版登录页Guest Mode新增访客图标和清晰的半透明入口，点击图标或文字仍调用原游客登录流程",
     "修复手机版新手教程后剧情无法点击：剧情期间触摸优先进入对话与选项处理，战斗按钮暂停覆盖剧情",
     "普通浏览器的添加到主屏幕引导根据浏览器首选语言显示中文或英文，非中文语言统一显示英文",
     "手机版联机无限战区移除底部联合战线常驻大面板，只保留紧凑Emoji入口与必要状态反馈",
