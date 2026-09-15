@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_7_MOBILE_CRYSTAL_ECONOMY_TOUCH",
+  build: "V49_35_7_MOBILE_COMPACT_BATTLE_UI",
   edition: "mobile",
   storyModule: true,
   optimized: true

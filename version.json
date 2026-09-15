@@ -1,12 +1,14 @@
 {
   "version": "49.35.7",
-  "build": "2026091404-mobile-crystal-economy-touch",
+  "build": "2026091501-mobile-compact-battle-ui",
   "edition": "mobile",
   "publishedAt": "2026-08-29T12:00:00Z",
   "mandatory": false,
   "minimumLauncherVersion": "1.0.0",
   "saveSchemaVersion": 80,
   "changelog": [
+    "手机版联机无限战区移除底部联合战线常驻大面板，只保留紧凑Emoji入口与必要状态反馈",
+    "手机版晶体战争框选工具条缩小并上移，避开底部设施提示与维修区域；触摸命中区同步调整",
     "晶体战争商店价格统一提高至原价3倍，设施建造、升级、维修与无限战区采集设备螺丝消耗统一提高至原来的2倍",
     "玩家权限等级经验获取倍率由4.5倍提高至6倍，角色与武器成长曲线不受影响",
     "手机版联机等待房间与联机无限战区新增紧凑Emoji入口，直接复用现有联机表情同步系统",
