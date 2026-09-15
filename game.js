@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_7_MOBILE_COMPACT_BATTLE_UI",
+  build: "V49_35_7_MOBILE_STORY_TOUCH_INSTALL_LOCALE",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -1340,7 +1340,7 @@ function isMobileLike(){
 }
 
 function shouldShowMobileControls(){
-  return mobileInput.enabled && !battlePaused && (gameMode==="battle" || gameMode==="tutorialBattle");
+  return mobileInput.enabled && !battlePaused && !window.PZStory?.active && (gameMode==="battle" || gameMode==="tutorialBattle");
 }
 
 function isMobileWaitingSpace(){return !!(mobileInput.enabled&&gameMode==="operation"&&selectedTab==="dualCrystal"&&window.PZCrystalWar?.isMobileWaitingSpace?.());}
@@ -1526,6 +1526,10 @@ function handleMobileTouchStart(e){
     if(gameMode==="boot"){
       if(bootSkipReady||(performance.now()-bootStartTime)>900){gameMode=bootNextMode||"login";if(gameMode==="login")requestLoginBgmPlay();}
       mobileInput.touchActions[t.identifier]="boot";continue;
+    }
+    if(window.PZStory?.active){
+      clicked=true;mouseDown=false;mouseAttackConsumed=true;
+      mobileInput.touchActions[t.identifier]="story";continue;
     }
     if(gameMode==="lobby")requestMobileMotionPermission();
     if(tryOpenMobileNativeKeyboardAt(p)){mobileInput.touchActions[t.identifier]="keyboard";continue;}

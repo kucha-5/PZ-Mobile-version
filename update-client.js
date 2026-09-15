@@ -3,7 +3,7 @@
 
   const VERSION_URL="version.json";
   const LOCAL_VERSION="49.35.7";
-  const LOCAL_BUILD="2026091403-mobile-training-weapon-art";
+  const LOCAL_BUILD="2026091502-mobile-story-touch-install-locale";
   const FILE_RUNTIME=location.protocol==="file:";
   const BUILD_KEY="pz_runtime_build";
   const VERSION_KEY="pz_runtime_version";
@@ -38,6 +38,14 @@
   const installSteps=document.getElementById("installSteps");
   const installButton=document.getElementById("installAppButton");
   let deferredInstallPrompt=null;
+  const installText={
+    zh:{title:"请先添加到主屏幕",intro:"手机版不会在普通浏览器页面中直接启动。添加到主屏幕后，请从 PZ Mobile 图标进入游戏。",steps:["打开浏览器的分享菜单或功能菜单","选择“添加到主屏幕”或“安装应用”","返回主屏幕，点击 PZ Mobile 图标启动"],button:"添加到主屏幕",manual:"请在浏览器菜单中选择“添加到主屏幕”",note:"完成后请关闭当前浏览器页面，从主屏幕图标启动游戏。"},
+    en:{title:"Add PZ Mobile to your home screen",intro:"The mobile game starts from your home screen, not from a regular browser page. Add it to your home screen, then open the PZ Mobile icon.",steps:["Open the browser's share or options menu","Choose “Add to Home Screen” or “Install App”","Return to your home screen and launch the PZ Mobile icon"],button:"Add to home screen",manual:"Choose “Add to Home Screen” from the browser menu",note:"When finished, close this browser page and launch the game from the home screen icon."}
+  };
+  function getInstallText(){
+    const browserLanguage=navigator.languages?.[0]||navigator.language||"en";
+    return /^zh(?:-|$)/i.test(browserLanguage)?installText.zh:installText.en;
+  }
 
   function mobileBrowserNeedsInstall(){
     const mobile=navigator.maxTouchPoints>0&&((window.matchMedia&&window.matchMedia("(pointer: coarse)").matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
@@ -45,17 +53,30 @@
     return mobile&&!installed&&!FILE_RUNTIME;
   }
   function showInstallGate(){
+    const copy=getInstallText();
     if(screen)screen.hidden=true;
     if(installGate)installGate.hidden=false;
-    if(installSteps)installSteps.innerHTML='<div class="install-step"><b>1</b>打开浏览器的分享菜单或功能菜单</div><div class="install-step"><b>2</b>选择“添加到主屏幕”或“安装应用”</div><div class="install-step"><b>3</b>返回主屏幕，点击 PZ Mobile 图标启动</div>';
+    const title=document.getElementById("installTitle"),intro=document.getElementById("installIntro"),note=document.getElementById("installNote");
+    if(title)title.textContent=copy.title;
+    if(intro)intro.textContent=copy.intro;
+    if(note)note.textContent=copy.note;
+    if(installSteps){
+      installSteps.replaceChildren();
+      copy.steps.forEach((step,index)=>{
+        const row=document.createElement("div"),number=document.createElement("b");
+        row.className="install-step";number.textContent=String(index+1);
+        row.append(number,document.createTextNode(step));installSteps.append(row);
+      });
+    }
     if(installButton){
+      installButton.textContent=copy.button;installButton.classList.remove("install-manual");
       installButton.onclick=async()=>{
         if(deferredInstallPrompt){
           deferredInstallPrompt.prompt();
           try{await deferredInstallPrompt.userChoice;}catch(_){}
           deferredInstallPrompt=null;
         }else{
-          installButton.textContent='请在浏览器菜单中选择“添加到主屏幕”';
+          installButton.textContent=copy.manual;
           installButton.classList.add("install-manual");
         }
       };
@@ -63,7 +84,7 @@
   }
   window.addEventListener("beforeinstallprompt",event=>{
     event.preventDefault();deferredInstallPrompt=event;
-    if(installButton){installButton.textContent="添加到主屏幕";installButton.classList.remove("install-manual");}
+    if(installButton){installButton.textContent=getInstallText().button;installButton.classList.remove("install-manual");}
   });
 
   const setStatus=(text,state="")=>{
