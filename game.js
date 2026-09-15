@@ -15,7 +15,7 @@
 // Build info for quick debugging
 window.PZ_MOBILE_EDITION = true;
 window.PZ_BUILD_INFO = window.PZ_BUILD_INFO || {
-  build: "V49_35_7_MOBILE_TRAINING_WEAPON_ART",
+  build: "V49_35_7_MOBILE_CRYSTAL_ECONOMY_TOUCH",
   edition: "mobile",
   storyModule: true,
   optimized: true
@@ -1536,6 +1536,14 @@ function handleMobileTouchStart(e){
     if((gameMode==="battle"||gameMode==="tutorialBattle")&&chainSelect){
       chainSelectChoiceRequested=p.x<W/2?0:1;mobileInput.touchActions[t.identifier]="chainChoice";clicked=false;mouseDown=false;continue;
     }
+    if(gameMode==="battle"&&battleModeSource==="crystalWar"){
+      if(window.PZCrystalWar?.handleBattleEmoteClick?.(p.x,p.y)){mobileInput.touchActions[t.identifier]="crystalEmote";clicked=false;mouseDown=false;continue;}
+      const deviceButton=mobileCrystalWarDeviceButtonRect();
+      if(pointInRect(p,deviceButton)){crystalWarBuildMenu=!crystalWarBuildMenu;mobileInput.touchActions[t.identifier]="crystalDeviceButton";clicked=false;mouseDown=false;mouseAttackConsumed=true;showActionPrompt(crystalWarBuildMenu?(language==="en"?"DEVICE RACK OPEN · TAP A DEVICE OR RESOURCE":"设备栏已打开 · 点击设备或资源点"):(language==="en"?"DEVICE RACK CLOSED":"设备栏已关闭"),55);continue;}
+      if(crystalWarBuildMenu&&p.x>=crystalWarRackPos.x&&p.x<=crystalWarRackPos.x+300&&p.y>=crystalWarRackPos.y&&p.y<=crystalWarRackPos.y+34){mobileInput.touchActions[t.identifier]="crystalRackHold";mobileInput.crystalRackHold={id:t.identifier,dx:p.x-crystalWarRackPos.x,dy:p.y-crystalWarRackPos.y,at:performance.now(),moved:false};clicked=false;mouseDown=false;continue;}
+      if(crystalWarBuildMenu&&((p.x>=crystalWarRackPos.x&&p.x<=crystalWarRackPos.x+300&&p.y>=crystalWarRackPos.y&&p.y<=crystalWarRackPos.y+224)||crystalWarMines.some(v=>p.x>=v.x-46&&p.x<=v.x+46&&p.y>=v.y-46&&p.y<=v.y+46))){mouseX=p.x;mouseY=p.y;clicked=true;mouseDown=false;mouseAttackConsumed=true;mobileInput.touchActions[t.identifier]="crystalDeviceTap";continue;}
+      if(!(p.x<390&&p.y>285)&&harvestCrystalWarNodeAt(p.x,p.y)){mobileInput.touchActions[t.identifier]="crystalHarvest";clicked=false;mouseDown=false;mouseAttackConsumed=true;continue;}
+    }
     if(shouldShowMobileJoystick()){
       if(p.x<390&&p.y>285&&mobileInput.joyId===null){
         mobileInput.joyId=t.identifier;mobileInput.joyBaseX=clamp(p.x,90,260);mobileInput.joyBaseY=clamp(p.y,390,H-95);mobileInput.joyX=p.x;mobileInput.joyY=p.y;mobileInput.touchActions[t.identifier]="joystick";continue;
@@ -1579,6 +1587,8 @@ function handleMobileTouchMove(e){
     if(action==="joystick"){
       const dx=p.x-mobileInput.joyBaseX,dy=p.y-mobileInput.joyBaseY,len=Math.hypot(dx,dy)||1,max=72,scale=Math.min(1,max/len);
       mobileInput.joyX=mobileInput.joyBaseX+dx*scale;mobileInput.joyY=mobileInput.joyBaseY+dy*scale;mobileInput.moveX=clamp(dx/max,-1,1);mobileInput.moveY=clamp(dy/max,-1,1);updateMobileMoveKeys();
+    }else if(action==="crystalRackHold"){
+      const hold=mobileInput.crystalRackHold;if(hold&&hold.id===t.identifier&&performance.now()-hold.at>=280){hold.moved=true;crystalWarRackPos.x=clamp(p.x-hold.dx,12,W-312);crystalWarRackPos.y=clamp(p.y-hold.dy,76,H-236);}
     }else if(action==="floraPending"){
       mouseX=p.x;mouseY=p.y;
     }else if(action==="floraWheel"){mouseX=p.x;mouseY=p.y;mobileInput.floraWheel.selected=floraWheelPick(p);
@@ -1610,6 +1620,7 @@ function handleMobileTouchEnd(e){
     else if(action==="floraPending"){clearTimeout(mobileInput.floraWheel.timer);const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;attackBuffer=10;mobileInput.floraWheel.touchId=null;}
     else if(action==="floraWheel")closeFloraWheel(true);
     else if(action.startsWith("button:")){if(action==="button:attack"&&mobileInput.activeButtons.attack!=="interact"&&mobileInput.activeButtons.attack!=="parry"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
+    else if(action==="crystalRackHold"){mobileInput.crystalRackHold=null;clicked=false;mouseDown=false;mouseAttackConsumed=true;}
     else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t),travel=Math.hypot(p.x-mobileInput.uiStartX,p.y-mobileInput.uiStartY),tapTime=performance.now()-mobileInput.uiStartAt;if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);if(mobileInput.uiDeferredTap&&!mobileInput.uiMoved&&travel<10&&tapTime<500){mouseX=p.x;mouseY=p.y;clicked=true;sfx("ui");}mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mobileInput.uiAxis="";mobileInput.uiDeferredTap=false;mouseDown=false;mouseAttackConsumed=false;}
     delete mobileInput.touchActions[t.identifier];
     delete mobileInput.touchPoints[t.identifier];
@@ -2281,6 +2292,7 @@ const CRYSTAL_WAR_FIELD_DEVICES=[
   {id:"forestry",z:"树材采集无人机",e:"FORESTRY DRONE",icon:"⌁",color:"#7cffb2",cost:9,resources:["wood","resin","biomass"]},
   {id:"bio",z:"生态采样器",e:"BIO COLLECTOR",icon:"✣",color:"#c89cff",cost:10,resources:["materials","fiber","herbs","flux","coolant"]}
 ];
+for(const fieldDevice of CRYSTAL_WAR_FIELD_DEVICES)fieldDevice.cost=Math.ceil(fieldDevice.cost*2);
 let selectedTab = "main";
 let mainChapterView = "chapters"; // chapters -> stage map
 let selectedMainChapter = 0;
@@ -6095,7 +6107,7 @@ function spawnAreaLegacyChapterPrototype(){
 }
 
 
-const PLAYER_LEVEL_EXP_GAIN_MULTIPLIER=4.5;
+const PLAYER_LEVEL_EXP_GAIN_MULTIPLIER=6;
 function addPlayerExp(amount){
   // Legacy compatibility: old stage EXP now feeds Action Record EXP.
   if(typeof arAddExp === "function") arAddExp(amount || 0, false);
@@ -6911,6 +6923,18 @@ function drawCrystalWarIndustry(){
 }
 
 function crystalWarDeviceFor(id){return CRYSTAL_WAR_FIELD_DEVICES.find(v=>v.id===id)||CRYSTAL_WAR_FIELD_DEVICES[0];}
+function mobileCrystalWarDeviceButtonRect(){return{x:W-78,y:88,w:52,h:48};}
+function harvestCrystalWarNodeAt(x,y){
+  if(battleModeSource!=="crystalWar"||crystalWarBuildMenu)return false;
+  const mine=crystalWarMines.filter(v=>v.remaining>0&&x>=v.x-46&&x<=v.x+46&&y>=v.y-46&&y<=v.y+46).sort((a,b)=>dist(player.x,player.y,a.x,a.y)-dist(player.x,player.y,b.x,b.y))[0];
+  if(!mine)return false;
+  if(dist(player.x,player.y,mine.x,mine.y)>155){showActionPrompt(language==="en"?"MOVE CLOSER TO HARVEST":"靠近资源点后才可采集",45);return true;}
+  const at=performance.now();if(at-(mine.lastHitAt||0)<260)return true;mine.lastHitAt=at;
+  const authoritative=!!(window.PZCrystalWar&&window.PZCrystalWar.getSharedBattleConfig?.()?.authoritative);
+  if(authoritative){window.PZCrystalWar.sendWorldEvent("resource_harvest",mine.id,{resource:mine.resource});addParticles(mine.x,mine.y,mine.color,8,4);return true;}
+  const amount=Math.min(mine.remaining,Math.max(1,Math.floor(1+roleDisplayLevel(player.role)/20)));mine.remaining-=amount;crystalWarResourceBuffer[mine.resource]=(crystalWarResourceBuffer[mine.resource]||0)+amount;crystalWarOreBuffer+=amount;if(window.PZCrystalWar&&typeof window.PZCrystalWar.sendWorldEvent==="function")window.PZCrystalWar.sendWorldEvent(mine.remaining>0?"resource_updated":"resource_removed",mine.id,{remaining:mine.remaining,resource:mine.resource});
+  addParticles(mine.x,mine.y,mine.color,8,4);addText(mine.x,mine.y-38,(language==="en"?"HARVEST +":"采集 +")+amount,mine.color,true);return true;
+}
 function harvestCrystalWarNodeByAttack(){
   if(battleModeSource!=="crystalWar"||crystalWarBuildMenu)return false;
   const sx=player.x+player.facing*55,sy=player.y;
@@ -6943,6 +6967,7 @@ function drawCrystalWarIndustryV8(){
   ctx.restore();
   if(crystalWarBuildMenu){ctx.save();const x=crystalWarRackPos.x,y=crystalWarRackPos.y,w=300,h=224;ctx.fillStyle="rgba(4,9,18,.94)";ctx.fillRect(x,y,w,h);ctx.strokeStyle="#ffe066";ctx.strokeRect(x,y,w,h);ctx.fillStyle="rgba(255,224,102,.13)";ctx.fillRect(x,y,w,34);ctx.fillStyle="#fff";ctx.font="bold 12px "+FONT_UI;ctx.textAlign="left";ctx.fillText(language==="en"?"FIELD DEVICE RACK [B] · DRAG":"战区设备栏 [B] · 拖动",x+15,y+23);CRYSTAL_WAR_FIELD_DEVICES.forEach((d,i)=>{const yy=y+36+i*58,on=crystalWarBuildSelected===d.id;ctx.fillStyle=on?"rgba(130,255,226,.18)":"rgba(255,255,255,.055)";ctx.fillRect(x+13,yy,272,50);ctx.strokeStyle=on?d.color:"rgba(255,255,255,.15)";ctx.strokeRect(x+13,yy,272,50);ctx.fillStyle=d.color;ctx.font="bold 18px "+FONT_UI;ctx.fillText(d.icon,x+28,yy+30);ctx.fillStyle="#fff";ctx.font="bold 10px "+FONT_UI;ctx.fillText((language==="en"?d.e:d.z)+" · 🔩"+d.cost,x+60,yy+20);ctx.fillStyle="rgba(255,255,255,.5)";ctx.font="8px "+FONT_UI;ctx.fillText(d.resources.map(k=>({rawOre:"晶矿",scrap:"合金",stone:"岩石",wood:"树材",resin:"树脂",materials:"原料",fiber:"纤维",herbs:"植株",sulfur:"炽硫",quartz:"石英",biomass:"生质",flux:"流相液"}[k]||k)).join(" / "),x+60,yy+37);});ctx.restore();}
   ctx.save();ctx.fillStyle="rgba(5,10,19,.82)";ctx.fillRect(370,18,380,45);ctx.strokeStyle="rgba(130,255,226,.35)";ctx.strokeRect(370,18,380,45);ctx.fillStyle="#82ffe2";ctx.font="bold 11px "+FONT_UI;ctx.textAlign="center";ctx.fillText((language==="en"?"SECTOR ":"无限区段 ")+area+" · ENEMY Lv."+crystalWarScaledLevel()+" · B "+(language==="en"?"DEVICE RACK":"设备栏"),560,46);ctx.restore();
+  if(mobileInput.enabled){const b=mobileCrystalWarDeviceButtonRect();ctx.save();ctx.shadowColor="#82ffe2";ctx.shadowBlur=crystalWarBuildMenu?13:5;ctx.fillStyle="rgba(6,15,27,.86)";ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,13);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=crystalWarBuildMenu?"#ffe066":"#82ffe2";ctx.lineWidth=2;ctx.stroke();ctx.fillStyle="#82ffe2";ctx.font="bold 22px "+FONT_UI;ctx.textAlign="center";ctx.fillText("▦",b.x+b.w/2,b.y+27);ctx.fillStyle="#fff";ctx.font="bold 7px "+FONT_UI;ctx.fillText(language==="en"?"DEVICE":"设备",b.x+b.w/2,b.y+42);ctx.restore();}
 }
 function startBattle(){
   // Defensive gate: stale bossKros state must never replace a normal stage.
