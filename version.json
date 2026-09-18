@@ -1,12 +1,13 @@
 {
-  "version": "49.35.7",
-  "build": "2026091602-mobile-raven-fx-tuning",
+  "version": "49.36.0",
+  "build": "2026091704-mobile-store-refresh-align",
   "edition": "mobile",
   "publishedAt": "2026-08-29T12:00:00Z",
   "mandatory": false,
   "minimumLauncherVersion": "1.0.0",
   "saveSchemaVersion": 80,
   "changelog": [
+    "下调拉文普通攻击、突刺、E与大招生命伤害；提高基础攻击、第三段、突刺及技能多段的护盾削减，进一步明确击破定位",
     "强化拉文高速多段斩击的交错残影、亮色斩线与连续命中节奏；聚怪阶段新增旋转环形剑风和向心拉扯表现",
     "拉文E自动连斩由3秒压缩至2秒；大招锁定段压缩至1.2秒、聚怪段压缩至2秒，10秒主动突刺状态保留",
     "降低拉文E与大招多段命中的削韧累计，减少高频触发连携技，同时保留击破定位",

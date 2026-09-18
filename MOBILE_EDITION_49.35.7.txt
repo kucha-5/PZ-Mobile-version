@@ -1,4 +1,4 @@
 Project Zero Mobile V49.35.7
-Build: 2026091602-mobile-raven-fx-tuning
+Build: 2026091701-mobile-raven-break-balance
 
 Independent Mobile edition. PC/Web source is not modified.
