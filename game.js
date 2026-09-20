@@ -3884,8 +3884,14 @@ function saveGame(){
       loginRewards, levelRewards, boughtPacks, ownedWeapons, weaponInventory, weaponLevelMigrationDone, crystalExchangePurchases, crystalExchangeWeekKey, dungeonStamina, dungeonWeeklyCrystalLeft, dungeonCrystalWeekKey, dungeonLastStaminaDate, dungeonCandy, dungeonStimulant, dungeonCandyMonthKey, dungeonCandyDailyUsed, dungeonCandyDailyKey, dungeonRewardMultiplier, materialDungeonDifficulty, materialDungeonDifficulties, materialDungeonSelected, materialDungeonScroll, moduleDungeonTarget, audioMuted, bgmVolume, sfxVolume, particlesEnabled, damageTextEnabled, tutorialCompleted, tutorialInProgress, tutorialResumeMode, language, prologueDone, lobbyGuideDone, lobbyGuideStep, achievements, totalKills, totalParries, totalChains, totalBossKills, totalGoldEarned, totalCrystalsEarned, growthGuidePage, growthGuidePageClaimed, growthGuideTaskClaimed, bossMultiplier, bossDifficulty, bossDifficulties, bossKrosWeeklyKey, dragonClaw, crystalHand, elementalFragments, uiGuideSeen, uiNewSeen, actionRecordLevel, actionRecordExp, actionRecordExpNeed, actionRecordPage, actionRecordAdvanced, actionRecordUltimate, actionRecordClaimed, actionRecordWeaponChoice, actionRecordTab, actionRecordTaskTab, actionRecordTaskClaimed, battleManualDailyClaimed,
       battleResume:captureBattleResumeSnapshot()
     };
+    current.shopTokens=shopTokens;
+    current.shopTokenPurchases=shopTokenPurchases;
+    current.shopScrewPurchases=shopScrewPurchases;
+    current.shopTokenMonthKey=shopTokenMonthKey;
+    current.shopScrewWeekKey=shopScrewWeekKey;
     current.projectAreaState=paState;
     current.projectAreaPaused=projectAreaPaused;
+    if(window.PZCrystalWar&&typeof window.PZCrystalWar.exportPersistentState==="function")current.crystalWarState=window.PZCrystalWar.exportPersistentState();
     current.crystalModuleInventory = crystalModuleInventory;
     current.externalProgress = collectExternalProgress(key);
     // Save updates are merged into the current record. Existing extension fields
@@ -3949,6 +3955,12 @@ function migrateSaveData(d){
   addMissing("profileOverviewMode", "achievements");
   addMissing("profileSignature", "");
   addMissing("crystalExchangeWeekKey", "");
+  addMissing("shopTokens", 0);
+  addMissing("shopTokenPurchases", {});
+  addMissing("shopScrewPurchases", {});
+  addMissing("shopTokenMonthKey", "");
+  addMissing("shopScrewWeekKey", "");
+  addMissing("crystalWarState", null);
   if(!Array.isArray(d.owned)){ d.owned=[true,true,false,false,true,false,false]; changed=true; }
   while(d.owned.length<roles.length){ d.owned.push(false); changed=true; }
   for(const roleId of [0,1,PROTAGONIST_ROLE]){
@@ -4067,6 +4079,10 @@ function loadGame(){
     if(d.projectAreaMapClears&&typeof d.projectAreaMapClears==="object")projectAreaMapClears=Object.assign({},d.projectAreaMapClears);
     if(d.projectAreaState&&typeof d.projectAreaState==="object")paState=cloneBattleResumeValue(d.projectAreaState,null);
     if(typeof d.projectAreaPaused==="boolean")projectAreaPaused=d.projectAreaPaused;
+    if(d.crystalWarState&&typeof d.crystalWarState==="object"){
+      window.PZ_PENDING_CRYSTAL_WAR_STATE=cloneBattleResumeValue(d.crystalWarState,null);
+      if(window.PZCrystalWar&&typeof window.PZCrystalWar.importPersistentState==="function")window.PZCrystalWar.importPersistentState(window.PZ_PENDING_CRYSTAL_WAR_STATE,false);
+    }
     if(Array.isArray(d.charData)) charData = d.charData;
     while(charData.length<roles.length){
       const roleId=charData.length;
@@ -4086,6 +4102,11 @@ function loadGame(){
     if(typeof d.monthlyOwned === "boolean") monthlyOwned = d.monthlyOwned;
     if(typeof d.monthlyClaimed === "boolean") monthlyClaimed = d.monthlyClaimed;
     if(typeof d.monthlyClaimDate === "string") monthlyClaimDate = d.monthlyClaimDate;
+    if(typeof d.shopTokens === "number") shopTokens = Math.max(0,Math.floor(d.shopTokens));
+    if(d.shopTokenPurchases && typeof d.shopTokenPurchases === "object") shopTokenPurchases = {...d.shopTokenPurchases};
+    if(d.shopScrewPurchases && typeof d.shopScrewPurchases === "object") shopScrewPurchases = {...d.shopScrewPurchases};
+    if(typeof d.shopTokenMonthKey === "string") shopTokenMonthKey = d.shopTokenMonthKey;
+    if(typeof d.shopScrewWeekKey === "string") shopScrewWeekKey = d.shopScrewWeekKey;
     normalizeMonthlyCardRuntime();
     if(typeof d.mailClaimed === "boolean") mailClaimed = d.mailClaimed;
     if(typeof d.mailDeleted === "boolean") mailDeleted = d.mailDeleted;
@@ -4791,6 +4812,13 @@ let shopMsg = msg("shopDefault");
 let shopTab = "recommend";
 let shopRecommendIndex = 0;
 let shopPackCategory = 0;
+let shopPackPage = "monthly";
+let shopExchangeSection = "token";
+let shopTokens = 0;
+let shopTokenPurchases = {};
+let shopScrewPurchases = {};
+let shopTokenMonthKey = "";
+let shopScrewWeekKey = "";
 let crystalExchangePurchases = {};
 let crystalExchangeWeekKey = "";
 let monthlyOwned = false;
@@ -11055,10 +11083,29 @@ function buyCrystalExchange(index){
   shopMsg=(language==="en"?"Exchanged: ":"兑换成功：")+(language==="en"?item.en:item.zh);
   saveGame();autoCloudSaveNow(true);
 }
+const SHOP_TOKEN_ITEMS=[
+  {id:"crystal",zh:"水晶补给",en:"Crystal Supply",cost:30,max:3,descZh:"水晶 ×60",descEn:"Crystal ×60",apply:()=>{crystals+=60;}},
+  {id:"gold",zh:"金币补给",en:"Gold Supply",cost:25,max:5,descZh:"金币 ×5000",descEn:"Gold ×5000",apply:()=>{gold+=5000;totalGoldEarned+=5000;}},
+  {id:"books",zh:"成长记录",en:"Growth Records",cost:20,max:6,descZh:"经验书 ×5",descEn:"EXP Books ×5",apply:()=>{expBooks+=5;}},
+  {id:"ore",zh:"武器素材",en:"Weapon Material",cost:20,max:6,descZh:"武器矿 ×3",descEn:"Weapon Ore ×3",apply:()=>{weaponOre+=3;}},
+  {id:"break",zh:"突破材料",en:"Breakthrough Kit",cost:45,max:4,descZh:"突破材料 ×2",descEn:"Breakthrough ×2",apply:()=>{skillBooks+=2;}}
+];
+const SHOP_SCREW_ITEMS=[
+  {id:"gold",zh:"大型金币箱",en:"Large Gold Crate",cost:2000,max:8,descZh:"金币 ×50000",descEn:"Gold ×50000",apply:()=>{gold+=50000;totalGoldEarned+=50000;}},
+  {id:"books",zh:"执行官训练箱",en:"Executor Training Crate",cost:3500,max:6,descZh:"经验书 ×40",descEn:"EXP Books ×40",apply:()=>{expBooks+=40;}},
+  {id:"ore",zh:"武装强化箱",en:"Armory Upgrade Crate",cost:4000,max:6,descZh:"武器矿 ×25",descEn:"Weapon Ore ×25",apply:()=>{weaponOre+=25;}},
+  {id:"skills",zh:"技能培养箱",en:"Skill Training Crate",cost:5000,max:4,descZh:"技能材料各 ×10",descEn:"Skill materials ×10 each",apply:()=>{skillMaterials.normal+=10;skillMaterials.skill+=10;skillMaterials.ultimate+=10;}},
+  {id:"break",zh:"高级突破箱",en:"Advanced Breakthrough Crate",cost:8000,max:3,descZh:"突破材料 ×12",descEn:"Breakthrough ×12",apply:()=>{skillBooks+=12;}}
+];
+function grantShopTokens(amount){shopTokens+=Math.max(0,Math.floor(amount||0));}
+function shopScrewBalance(){return Math.max(0,Math.floor(window.PZCrystalWar?.getResourceSnapshot?.()?.screws||0));}
+function normalizeShopExchangeCycles(){const mk=currentMonthKey(),wk=currentWeekKeyLegacyV41();if(shopTokenMonthKey!==mk){shopTokenMonthKey=mk;shopTokenPurchases={};}if(shopScrewWeekKey!==wk){shopScrewWeekKey=wk;shopScrewPurchases={};}}
+function buyShopExchange(index){const screw=shopExchangeSection==="screw",list=screw?SHOP_SCREW_ITEMS:SHOP_TOKEN_ITEMS,item=list[index],ledger=screw?shopScrewPurchases:shopTokenPurchases;if(!item)return;const bought=Math.max(0,Number(ledger[item.id])||0);if(bought>=item.max){shopMsg=language==="en"?"Exchange limit reached.":"该物品已达到兑换上限。";return;}if(screw){if(!window.PZCrystalWar?.spendScrews?.(item.cost)){shopMsg=language==="en"?"Not enough Screws.":"螺丝不足。";return;}}else{if(shopTokens<item.cost){shopMsg=language==="en"?"Not enough Tokens.":"信物不足。";return;}shopTokens-=item.cost;}item.apply();ledger[item.id]=bought+1;sfx("buy");shopMsg=(language==="en"?"Exchanged: ":"兑换成功：")+(language==="en"?item.en:item.zh);saveGame();autoCloudSaveNow(true);}
 function updateShop(){
   menuPulse++;
   normalizeMonthlyCardRuntime();
   normalizeCrystalExchangeWeekly();
+  normalizeShopExchangeCycles();
   if(shopTab==="recruit"&&shopSubTab==="permanent"){
     if(shopRecruitWheelDelta){shopRecruitScrollY=clamp(shopRecruitScrollY+shopRecruitWheelDelta*.72,0,permanentRecruitMaxVerticalScroll());shopRecruitWheelDelta=0;}
     shopRecruitScrollX=clamp(shopRecruitScrollX,0,permanentRecruitMaxScroll());
@@ -11104,7 +11151,7 @@ function updateShop(){
     const tabs = ["recommend","recruit","weapon","skin","crystal","monthly","packs","support"];
     for(let i=0;i<tabs.length;i++){
       if(inRect(40+i*132,135,122,42)){
-        if(["crystal","monthly","packs"].includes(tabs[i])){
+        if(["crystal","packs"].includes(tabs[i])){
           paidContentLockPrompt=true;
           shopMsg=language==="en"?"Paid content is unavailable during the first test.":"一测期间目前不开放充值内容。";
           clicked=false;
@@ -11145,7 +11192,7 @@ function updateShop(){
           if(x+cardW>=startX&&x<=W-56&&inRect(x+224,y+226,182,42)){
             const it=items[n];
             if(owned[it.i]) shopMsg=roleName(it.i)+mt("alreadyOwnedSuffix");
-            else if(crystals>=it.price){ crystals-=it.price; owned[it.i]=true; if(charData[it.i])charData[it.i].equippedWeaponId=defaultWeaponIdForRole(it.i); shopMsg=roleName(it.i)+mt("recruitedSuffix"); sfx("buy"); saveGame(); autoCloudSaveNow(true); }
+            else if(crystals>=it.price){ crystals-=it.price; owned[it.i]=true; grantShopTokens(Math.max(25,Math.floor(it.price/40))); if(charData[it.i])charData[it.i].equippedWeaponId=defaultWeaponIdForRole(it.i); shopMsg=roleName(it.i)+mt("recruitedSuffix"); sfx("buy"); saveGame(); autoCloudSaveNow(true); }
             else shopMsg=mt("notEnoughCrystal");
           }
         }
@@ -11174,17 +11221,17 @@ function updateShop(){
         const selected=weaponData(shopWeaponSelectedId),item=weaponInventory.find(v=>v.id===selected.id);
         if(selected.price>0&&!item?.owned&&inRect(840,292,180,42)){
           if(crystals<selected.price) shopMsg=mt("notEnoughCrystal");
-          else{crystals-=selected.price;item.owned=true;shopMsg=(language==="en"?"Purchased: ":"购买成功：")+weaponNameById(selected.id);sfx("buy");saveGame();autoCloudSaveNow(true);}
+          else{crystals-=selected.price;item.owned=true;grantShopTokens(Math.max(15,Math.floor(selected.price/45)));shopMsg=(language==="en"?"Purchased: ":"购买成功：")+weaponNameById(selected.id);sfx("buy");saveGame();autoCloudSaveNow(true);}
         }
       }
     }
 
 
     if(shopTab==="monthly"){
-      if(inRect(570,305,240,72)){
-        paidContentLockPrompt=true;
-        shopMsg=language==="en"?"Paid content is unavailable during the first test.":"一测期间目前不开放充值内容。";
-      }
+      if(inRect(55,205,190,52))shopExchangeSection="token";
+      if(inRect(55,269,190,52))shopExchangeSection="screw";
+      const list=shopExchangeSection==="screw"?SHOP_SCREW_ITEMS:SHOP_TOKEN_ITEMS;
+      for(let i=0;i<list.length;i++){const col=i%3,row=Math.floor(i/3),x=270+col*250,y=215+row*142;if(inRect(x,y,226,122)){buyShopExchange(i);break;}}
     }
 
     if(shopTab==="crystal"){
@@ -11195,6 +11242,10 @@ function updateShop(){
     }
 
     if(shopTab==="packs"){
+      if(inRect(270,188,170,34)){shopPackPage="monthly";clicked=false;return;}
+      if(inRect(450,188,170,34)){shopPackPage="packs";clicked=false;return;}
+      if(shopPackPage==="monthly"&&inRect(570,305,240,72)){paidContentLockPrompt=true;shopMsg=language==="en"?"Paid content is unavailable during the first test.":"一测期间目前不开放充值内容。";clicked=false;return;}
+      if(shopPackPage!=="packs"){clicked=false;return;}
       for(let i=0;i<5;i++) if(inRect(60,223+i*54,180,42)){shopPackCategory=i;shopMsg=language==="en"?"Pack category selected.":"已切换礼包分类。";}
       const packList=visibleShopPacks();
       for(let i=0;i<Math.min(6,packList.length);i++){
@@ -19680,7 +19731,7 @@ function drawShop(){
     ["weapon",ui("weaponDepot")],
     ["skin",ui("skin")],
     ["crystal",(language==="en"?"Crystals":"水晶")+" LOCK"],
-    ["monthly",ui("monthly")+" LOCK"],
+    ["monthly",language==="en"?"Store":"商铺"],
     ["packs",ui("packs")+" LOCK"],
     ["support",ui("developerSupport")]
   ];
@@ -19798,22 +19849,15 @@ function drawShop(){
   }
 
   if(shopTab==="monthly"){
-    const mg=ctx.createLinearGradient(80,220,860,470);mg.addColorStop(0,"rgba(27,47,86,.98)");mg.addColorStop(.5,"rgba(62,36,93,.96)");mg.addColorStop(1,"rgba(8,11,22,.99)");
-    ctx.beginPath();ctx.roundRect(80,220,780,250,18);ctx.fillStyle=mg;ctx.fill();ctx.strokeStyle="rgba(185,152,255,.45)";ctx.lineWidth=2;ctx.stroke();
-    ctx.fillStyle="#b998ff";ctx.fillRect(80,220,7,250);
-    ctx.fillStyle="rgba(255,255,255,.42)";ctx.font="bold 11px "+FONT_UI;ctx.textAlign="left";ctx.fillText("PROJECT ZERO / 30 DAYS",110,254);
-    ctx.fillStyle="#fff";ctx.font="bold 30px "+FONT_UI;ctx.fillText(language==="en"?"Monthly Supply Card":"月度补给卡",110,300);
-    ctx.fillStyle="rgba(255,255,255,.72)";ctx.font="14px "+FONT_UI;ctx.fillText(language==="en"?"Instant: 300 Crystal":"立即获得：水晶 300",110,338);
-    ctx.fillText(language==="en"?"Daily: 90 Crystal + 30 Stamina":"每日可领：水晶 90 + 体力 30",110,366);
-    ctx.fillStyle="#ffe066";ctx.font="bold 24px Arial";ctx.fillText("$4.99",110,412);
-    normalizeMonthlyCardRuntime();
-    ctx.fillStyle=canClaimMonthlyCard()?"#7cffb2":"rgba(255,255,255,.52)";
-    ctx.font="bold 14px " + FONT_UI;
-    ctx.fillText(canClaimMonthlyCard() ? (language==="en"?"Available today":"今日可领取") : (monthlyOwned ? (language==="en"?"Claimed today":"今日已领取") : (language==="en"?"Not active":"未开启")),110,445);
-    drawBtn(monthlyOwned?(canClaimMonthlyCard()?mt("dailyClaim"):(language==="en"?"Claimed":"已领取")):(language==="en"?"Activate":"开启月卡"),monthlyOwned?"":"$4.99",570,305,240,72,!monthlyOwned||canClaimMonthlyCard(),"#ffe066");
+    const screw=shopExchangeSection==="screw",list=screw?SHOP_SCREW_ITEMS:SHOP_TOKEN_ITEMS,ledger=screw?shopScrewPurchases:shopTokenPurchases;
+    ctx.fillStyle="rgba(6,10,20,.76)";ctx.fillRect(45,195,210,310);ctx.textAlign="left";ctx.strokeStyle="rgba(255,255,255,.14)";ctx.strokeRect(45,195,210,310);[["token",language==="en"?"Token Exchange":"信物兑换"],["screw",language==="en"?"Screw Exchange":"螺丝商店"]].forEach((v,i)=>{const y=205+i*64,a=shopExchangeSection===v[0];ctx.fillStyle=a?"rgba(255,224,102,.14)":"rgba(255,255,255,.035)";ctx.fillRect(55,y,190,52);ctx.fillStyle=a?"#ffe066":"rgba(255,255,255,.18)";ctx.fillRect(55,y,4,52);ctx.fillStyle=a?"#fff":"rgba(255,255,255,.7)";ctx.font="bold 14px "+FONT_UI;ctx.fillText(v[1],73,y+31);});ctx.textAlign="left";ctx.fillStyle="rgba(255,255,255,.48)";ctx.font="11px "+FONT_UI;ctx.fillText(language==="en"?"Token stock resets monthly":"信物商店 · 每月刷新",73,352);ctx.fillText(language==="en"?"Screw stock resets weekly":"螺丝商店 · 每周刷新",73,374);ctx.textAlign="right";ctx.fillStyle="#ffe066";ctx.font="bold 14px "+FONT_UI;ctx.fillText((language==="en"?"TOKENS ":"信物：")+shopTokens,825,202);ctx.fillStyle="#dfe5ec";ctx.fillText((language==="en"?"SCREWS ":"螺丝：")+shopScrewBalance(),1040,202);ctx.textAlign="left";for(let i=0;i<list.length;i++){const it=list[i],col=i%3,row=Math.floor(i/3),x=270+col*250,y=215+row*142,w=226,h=122,b=Math.max(0,Number(ledger[it.id])||0),sold=b>=it.max;ctx.fillStyle=sold?"rgba(255,255,255,.035)":"rgba(18,28,45,.96)";ctx.fillRect(x,y,w,h);ctx.strokeStyle=sold?"rgba(255,255,255,.1)":(screw?"rgba(201,208,218,.42)":"rgba(255,224,102,.42)");ctx.strokeRect(x,y,w,h);ctx.fillStyle=screw?"#c9d0da":"#ffe066";ctx.fillRect(x,y,5,h);ctx.fillStyle=sold?"#777":"#fff";ctx.font="bold 14px "+FONT_UI;ctx.fillText(language==="en"?it.en:it.zh,x+16,y+29);ctx.fillStyle="rgba(255,255,255,.58)";ctx.font="11px "+FONT_UI;ctx.fillText(language==="en"?it.descEn:it.descZh,x+16,y+57);ctx.fillStyle=sold?"#666":(screw?"#dfe5ec":"#ffe066");ctx.font="bold 13px "+FONT_UI;ctx.fillText((screw?(language==="en"?"SCREWS ":"螺丝 "):(language==="en"?"TOKENS ":"信物 "))+it.cost,x+16,y+94);ctx.textAlign="right";ctx.fillText((it.max-b)+" / "+it.max,x+w-15,y+94);ctx.textAlign="left";}
   }
 
   if(shopTab==="packs"){
+    drawBtn(language==="en"?"Monthly Card":"月卡","",270,188,170,34,shopPackPage==="monthly","#b998ff");drawBtn(language==="en"?"Gift Packs":"礼包","",450,188,170,34,shopPackPage==="packs","#ffe066");
+    if(shopPackPage==="monthly"){
+      const mg=ctx.createLinearGradient(80,235,860,485);mg.addColorStop(0,"rgba(27,47,86,.98)");mg.addColorStop(.5,"rgba(62,36,93,.96)");mg.addColorStop(1,"rgba(8,11,22,.99)");ctx.beginPath();ctx.roundRect(80,235,780,250,18);ctx.fillStyle=mg;ctx.fill();ctx.strokeStyle="rgba(185,152,255,.45)";ctx.stroke();ctx.fillStyle="#b998ff";ctx.fillRect(80,235,7,250);ctx.fillStyle="#fff";ctx.font="bold 30px "+FONT_UI;ctx.fillText(language==="en"?"Monthly Supply Card":"月度补给卡",110,310);ctx.fillStyle="rgba(255,255,255,.72)";ctx.font="14px "+FONT_UI;ctx.fillText(language==="en"?"Instant: 300 Crystal":"立即获得：水晶 300",110,348);ctx.fillText(language==="en"?"Daily: 90 Crystal + 30 Stamina":"每日可领：水晶 90 + 体力 30",110,376);ctx.fillStyle="#ffe066";ctx.font="bold 24px Arial";ctx.fillText("$4.99",110,422);drawBtn(monthlyOwned?(canClaimMonthlyCard()?mt("dailyClaim"):(language==="en"?"Claimed":"已领取")):(language==="en"?"Activate":"开启月卡"),monthlyOwned?"":"$4.99",570,305,240,72,!monthlyOwned||canClaimMonthlyCard(),"#ffe066");
+    }else{
     const cats=language==="en"?["All Packs","Starter","Limited","Standard","Monthly"]:["全部礼包","启程礼包","限时礼包","标准礼包","月度礼包"];
     const packs=visibleShopPacks();
     ctx.fillStyle="rgba(6,10,20,.70)";ctx.fillRect(45,195,210,310);ctx.strokeStyle="rgba(255,255,255,.14)";ctx.strokeRect(45,195,210,310);
@@ -19836,6 +19880,7 @@ function drawShop(){
       ctx.fillStyle="rgba(255,255,255,.58)";ctx.font="9px "+FONT_UI;ctx.fillText(language==="en"?pack.descEn:pack.descZh,x+14,y+108);
       ctx.textAlign="right";ctx.fillStyle="#ffe066";ctx.font="bold 9px "+FONT_UI;ctx.fillText(language==="en"?pack.limitEn:pack.limitZh,x+w-12,y+17);ctx.textAlign="left";
       if(pack.price){ctx.textAlign="right";ctx.fillStyle="#fff";ctx.font="bold 12px Arial";ctx.fillText(pack.price,x+w-12,y+91);ctx.textAlign="left";}
+    }
     }
   }
 
