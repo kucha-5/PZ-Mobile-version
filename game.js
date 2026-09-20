@@ -1554,7 +1554,7 @@ function handleMobileTouchStart(e){
       }
     }
     if(mobileInput.uiTouchId===null){
-      const deferTap=gameMode==="operators"||gameMode==="achievements"||gameMode==="warehouse"||gameMode==="actionRecord"||gameMode==="team"||(gameMode==="operation"&&selectedTab==="dualCrystal")||(gameMode==="shop"&&shopTab==="recruit")||(gameMode==="lobby"&&lobbyAssistantSelectorOpen);
+      const deferTap=gameMode==="operators"||gameMode==="achievements"||gameMode==="warehouse"||gameMode==="actionRecord"||gameMode==="team"||(gameMode==="operation"&&selectedTab==="dualCrystal")||(gameMode==="shop"&&(shopTab==="recruit"||shopTab==="weapon"))||(gameMode==="lobby"&&lobbyAssistantSelectorOpen);
       mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=!deferTap;mobileInput.uiDeferredTap=deferTap;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiStartAt=performance.now();mobileInput.uiMoved=false;mobileInput.uiAxis="";mobileInput.scrollAccum=0;mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);if(!deferTap)sfx("ui");
     }
   }
@@ -1587,6 +1587,8 @@ function handleMobileTouchMove(e){
         }else if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent"&&mobileInput.uiStartY>=230&&mobileInput.uiStartY<=550){
           if(mobileInput.uiAxis==="x")shopRecruitScrollX=clamp(shopRecruitScrollX-dx,0,permanentRecruitMaxScroll());
           else shopRecruitWheelDelta+=-dy;
+        }else if(gameMode==="shop"&&shopTab==="weapon"&&shopSubTab==="permanent"&&mobileInput.uiStartY>=350&&mobileInput.uiStartY<=540){
+          shopWeaponScrollX=clamp(shopWeaponScrollX-(mobileInput.uiAxis==="x"?dx:dy),0,permanentWeaponMaxScroll());
         }else applyMobileSwipeDelta(dx,dy,p);
       }
       mobileInput.uiLastX=p.x;mobileInput.uiLastY=p.y;
@@ -2564,6 +2566,7 @@ let cloudInitialSyncDone = false;
 let cloudApplyingRemote = false;
 let cloudBootListenerAttached = false;
 let cloudAuthStateResolved = false;
+let mobileAccountStartReadyAt = performance.now()+1200;
 let explicitGuestSession = guestMode;
 let deletionPromptActive = false;
 let deletionScheduledAtMs = 0;
@@ -2723,6 +2726,7 @@ function initCloudSave(){
   cloudUser=cloudUserFromApi(u);
   cloudPersistenceReady=window.PZAccount.restore().then(restored=>{
     cloudUser=cloudUserFromApi(restored);
+    mobileAccountStartReadyAt=performance.now()+700;
     return restored;
   }).catch(error=>{ console.warn("[SF Account restore]",error); cloudUser=null; return null; });
   return true;
@@ -5125,6 +5129,7 @@ let shopRecruitScrollY = 0;
 let shopRecruitDrag = null;
 let shopLimitedScrollY = 0;
 let shopLimitedWheelDelta = 0;
+let shopWeaponScrollX = 0;
 let boughtPacks = {starter:false, growth:false, weapon:false};
 const STAGE_BACKGROUNDS = I18N_RES.STAGE_BACKGROUNDS || {
   zh:["事务处前街","石桥商业街","旧钟楼侧巷","蓝轨广场","下城区入口","旧城区边缘","废弃仓库","异常信号点","夜色长街","事务处外墙","雷文哈多守卫点"],
@@ -9555,20 +9560,26 @@ function updateLogin(){
   }
 
   if(cloudUser && !guestMode){
-    if(clicked || justPressed("enter") || justPressed(" ")){
+    const canStart=cloudAuthStateResolved&&performance.now()>=mobileAccountStartReadyAt;
+    if((clicked&&inRect(W/2-155,H/2-18,310,62)&&canStart) || ((justPressed("enter")||justPressed(" "))&&canStart)){
       clicked=false;
       startLoggedInAccountGame();
+    }else if(clicked&&inRect(W/2-125,H/2+82,250,40)){
+      clicked=false;signOutAndClearLocal(true);
     }
     clicked=false;
     return;
   }
 
   if(guestMode && hasCreatedProfile && validPlayerName(playerName)){
-    if(clicked || justPressed("enter") || justPressed(" ")){
+    const canStart=performance.now()>=mobileAccountStartReadyAt;
+    if((clicked&&inRect(W/2-155,H/2-18,310,62)&&canStart) || ((justPressed("enter")||justPressed(" "))&&canStart)){
       clicked=false;
       setStoredGuestSessionActive(true);
       explicitGuestSession=true;
       startLoading(startTargetAfterAuth());
+    }else if(clicked&&inRect(W/2-125,H/2+82,250,40)){
+      clicked=false;exitLocalGuestSession();
     }
     clicked=false;
     return;
@@ -11041,6 +11052,7 @@ function permanentRecruitMaxScroll(){
   return Math.max(0,items.length*(cardW+gap)-gap-visibleW);
 }
 function permanentRecruitMaxVerticalScroll(){ return 300; }
+function permanentWeaponMaxScroll(){const count=permanentWeaponCatalog().length;return Math.max(0,count*245-15-980);}
 const SHOP_PACKS=[
   {id:"starter",cat:1,accent:"#7cffb2",zh:"启程补给",en:"Starter Supply",descZh:"经验书×8 · 金币×8000 · 水晶×180",descEn:"EXP ×8 · Gold ×8,000 · Crystal ×180",price:"$0.99",limitZh:"永久限购1次",limitEn:"ONE-TIME"},
   {id:"tactical",cat:2,accent:"#ff8d72",zh:"战术支援",en:"Tactical Support",descZh:"武器素材×8 · 经验书×12 · 水晶×720",descEn:"Ore ×8 · EXP ×12 · Crystal ×720",price:"$9.99",limitZh:"限时限购1次",limitEn:"LIMITED · 1"},
@@ -11231,7 +11243,7 @@ function updateShop(){
       if(shopSubTab==="permanent"){
         const catalog=permanentWeaponCatalog();
         for(let n=0;n<catalog.length;n++){
-          const col=n%4,row=Math.floor(n/4),cx=70+col*245,cy=366+row*68;
+          const cx=70+n*245-shopWeaponScrollX,cy=382;
           if(inRect(cx,cy,230,58)){shopWeaponSelectedId=catalog[n].id;shopMsg=language==="en"?"Weapon details selected.":"已切换武器详情。";break;}
         }
         const selected=weaponData(shopWeaponSelectedId),item=weaponInventory.find(v=>v.id===selected.id);
@@ -13667,16 +13679,12 @@ function drawLogin(){
       drawDeletionPeriodPrompt();
       return;
     }
-    const pulse=.58 + Math.sin(menuPulse/20)*.28;
-    ctx.globalAlpha=pulse;
-    ctx.fillStyle="#ffe066";
-    ctx.font="bold 26px " + FONT_UI;
-    ctx.fillText(tr("点击开始","Tap To Start"),W/2,H/2+18);
-    ctx.globalAlpha=1;
+    drawBtn(tr("以此账号进入","CONTINUE WITH THIS ACCOUNT"),"",W/2-155,H/2-18,310,62,cloudAuthStateResolved&&performance.now()>=mobileAccountStartReadyAt,"#ffe066");
 
     ctx.fillStyle="rgba(255,255,255,.58)";
     ctx.font="15px " + FONT_UI;
     ctx.fillText(cloudUser.email || cloudTx("cloudLoggedIn"),W/2,H/2+62);
+    drawBtn(tr("切换账号","SWITCH ACCOUNT"),"",W/2-125,H/2+82,250,40,true,"#9aa7bd");
 
     ctx.fillStyle="rgba(255,255,255,.58)";
     ctx.font="15px " + FONT_UI;
@@ -13689,15 +13697,11 @@ function drawLogin(){
   }
 
   if(guestMode && hasCreatedProfile && validPlayerName(playerName)){
-    const pulse=.58 + Math.sin(menuPulse/20)*.28;
-    ctx.globalAlpha=pulse;
-    ctx.fillStyle="#ffe066";
-    ctx.font="bold 26px " + FONT_UI;
-    ctx.fillText(tr("点击开始","Tap To Start"),W/2,H/2+18);
-    ctx.globalAlpha=1;
+    drawBtn(tr("进入游客存档","CONTINUE GUEST SAVE"),"",W/2-155,H/2-18,310,62,performance.now()>=mobileAccountStartReadyAt,"#ffe066");
     ctx.fillStyle="rgba(255,255,255,.66)";
     ctx.font="15px " + FONT_UI;
     ctx.fillText((playerName||"PLAYER")+"  ·  "+tr("游客本地存档","Local Guest Save"),W/2,H/2+62);
+    drawBtn(tr("切换账号","SWITCH ACCOUNT"),"",W/2-125,H/2+82,250,40,true,"#9aa7bd");
     ctx.fillStyle="rgba(255,255,255,.48)";
     ctx.fillText(accountMsg || tr("游客进度已保存在此设备","Guest progress is saved on this device"),W/2,H-70);
     ctx.fillStyle="rgba(255,255,255,.32)";
@@ -19589,6 +19593,16 @@ function drawFloraLimitedFullPortrait(x,y,w,h,alpha=1){
   ctx.drawImage(floraExecutorPortraitImg,sx,sy,sw,sh,x+(w-dw)/2,y+h-dh,dw,dh);ctx.restore();return true;
 }
 
+function recruitModelIdlePose(roleId){
+  const phase=(menuPulse*.012+roleId*.71)%(Math.PI*2),lift=.5+.5*Math.sin(phase),turn=Math.sin(phase*.72);
+  const names=["bladeCheck","bowTune","dualSpin","focusOrb","coatFix","medicalCheck","shieldBrace","katanaSheath"];
+  return{name:names[roleId]||"lookAround",phase:phase/(Math.PI*2),lift,turn,weapon:lift};
+}
+function drawRecruitModelStand(roleId,cx,cy,scale=1){
+  const r=roles[roleId]||roles[0],pulse=.5+.5*Math.sin(menuPulse*.045+roleId);
+  ctx.save();ctx.translate(cx,cy);ctx.fillStyle="rgba(3,8,15,.72)";ctx.beginPath();ctx.ellipse(0,27,43*scale,12*scale,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle=r.color;ctx.globalAlpha=.45+.3*pulse;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,27,39*scale,9*scale,0,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;ctx.scale(scale,scale);ctx.shadowColor=r.color;ctx.shadowBlur=13;drawPortraitBasedBattleModel(roleId,25,1,false,0,recruitModelIdlePose(roleId));ctx.shadowBlur=0;ctx.restore();
+}
+
 function drawLimitedRecruitShowcase(){
   const vx=55,vy=235,vw=1010,vh=310,scroll=shopLimitedScrollY,pulse=.5+.5*Math.sin(menuPulse*.045),ownedNow=!!owned[3];
   ctx.save();ctx.beginPath();ctx.rect(vx,vy,vw,vh);ctx.clip();ctx.translate(0,-scroll);
@@ -19602,6 +19616,7 @@ function drawLimitedRecruitShowcase(){
   ctx.fillStyle="#fff";ctx.font="bold 46px "+FONT_UI;ctx.fillText(tx("floraDisplayFull"),86,y+102);
   ctx.fillStyle="#bfe8ff";ctx.font="bold 16px "+FONT_UI;ctx.fillText(mt("floraShopRank"),88,y+137);
   ctx.fillStyle="rgba(255,255,255,.76)";ctx.font="14px "+FONT_UI;drawUIText(mt("floraShopFeature"),88,y+174,350,{size:14,maxLines:3,lineH:24});
+  drawRecruitModelStand(3,260,y+226,1.22);
   ctx.fillStyle="rgba(4,10,18,.72)";ctx.fillRect(78,y+272,390,70);ctx.strokeStyle="rgba(136,216,255,.35)";ctx.strokeRect(78,y+272,390,70);ctx.fillStyle="#ffe066";ctx.font="bold 12px "+FONT_UI;ctx.fillText(language==="en"?"FIXED PRICE · NO ODDS · NO GACHA":"固定价格 · 无概率 · 非抽卡",96,y+300);ctx.fillStyle="rgba(255,255,255,.58)";ctx.font="11px "+FONT_UI;ctx.fillText(language==="en"?"Purchase once to permanently recruit Flora":"购买一次即可永久获得芙洛拉",96,y+325);
   ctx.strokeStyle=`rgba(136,216,255,${.55+pulse*.3})`;ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);
   const dy=645;ctx.fillStyle="rgba(8,14,27,.98)";ctx.fillRect(x,dy,w,205);ctx.strokeStyle="rgba(136,216,255,.35)";ctx.strokeRect(x,dy,w,205);ctx.fillStyle="#88d8ff";ctx.fillRect(x,dy,7,205);
@@ -19668,8 +19683,11 @@ function drawShopWeaponArmory(){
   drawInsetLabel(ownedItem?(language==="en"?"OWNED":"已拥有"):(language==="en"?"LOCKED":"未获得"),x+w-122,y+22,92,30,ownedItem?"#7cc7ff":"#888","rgba(255,255,255,.05)","rgba(255,255,255,.16)",11,true,"center");
   if(selected.price>0&&!ownedItem) drawBtn(language==="en"?"Purchase":"购买","◆ "+selected.price,840,292,180,42,true,"#ffe066");
 
+  shopWeaponScrollX=clamp(shopWeaponScrollX,0,permanentWeaponMaxScroll());
+  ctx.save();ctx.beginPath();ctx.rect(x,366,w,94);ctx.clip();
   for(let n=0;n<catalog.length;n++){
-    const wd=catalog[n],col=n%4,row=Math.floor(n/4),cx=x+col*245,cy=366+row*68,cw=230,ch=58,active=wd.id===shopWeaponSelectedId;
+    const wd=catalog[n],cx=x+n*245-shopWeaponScrollX,cy=382,cw=230,ch=58,active=wd.id===shopWeaponSelectedId;
+    if(cx+cw<x||cx>x+w)continue;
     const owned=(weaponInventory||[]).some(v=>v.id===wd.id&&v.owned);
     ctx.fillStyle=active?"rgba(124,199,255,.14)":"rgba(255,255,255,.055)";ctx.fillRect(cx,cy,cw,ch);
     ctx.strokeStyle=active?"#7cc7ff":"rgba(255,255,255,.13)";ctx.lineWidth=active?2:1;ctx.strokeRect(cx,cy,cw,ch);
@@ -19679,6 +19697,8 @@ function drawShopWeaponArmory(){
     ctx.fillStyle="rgba(255,255,255,.50)";ctx.font="9px "+FONT_UI;ctx.fillText(weaponTypeLabel(wd.type)+" · ATK "+wd.baseAtk,cx+73,cy+39);
     ctx.textAlign="right";ctx.fillStyle=owned?"#7cc7ff":"#777";ctx.fillText(owned?(language==="en"?"OWNED":"已拥有"):(language==="en"?"LOCK":"未获得"),cx+cw-10,cy+50);
   }
+  ctx.restore();
+  const maxScroll=permanentWeaponMaxScroll();if(maxScroll>0){const knob=Math.max(130,w*(w/(catalog.length*245-15))),kx=x+(w-knob)*(shopWeaponScrollX/maxScroll);ctx.fillStyle="rgba(255,255,255,.10)";ctx.fillRect(x,470,w,4);ctx.fillStyle="#7cc7ff";ctx.fillRect(kx,470,knob,4);ctx.fillStyle="rgba(255,255,255,.55)";ctx.font="10px "+FONT_UI;ctx.textAlign="center";ctx.fillText(language==="en"?"Swipe left / right to browse the permanent armory":"左右滑动查看常驻武器库",x+w/2,492);}
 }
 
 function drawShopPackArt(pack,x,y,w,h){
@@ -19718,6 +19738,7 @@ function drawPermanentRecruitCard(it,x,y,w=430,h=290){
   ctx.fillStyle="rgba(255,255,255,.66)";ctx.font="11px "+FONT_UI;ctx.fillText(fitTextToWidth(r.line,182,11,false),x+224,y+143);
   ctx.fillStyle="rgba(255,255,255,.38)";ctx.font="9px "+FONT_UI;ctx.fillText(language==="en"?"Fixed price · permanent unlock":"明码直购 · 永久获得",x+224,y+170);
   ctx.fillStyle=ownedNow?"#7cc7ff":"#ffe066";ctx.font="bold 17px Arial";ctx.fillText(ownedNow?(language==="en"?"RECRUITED":"已获得"):("◆ "+it.price),x+224,y+206);
+  drawRecruitModelStand(i,x+360,y+181,.88);
   drawBtn(ownedNow?(language==="en"?"Owned":"已拥有"):(language==="en"?"Recruit":"确认招募"),ownedNow?"✓":("◆ "+it.price),x+224,y+226,182,42,!ownedNow,ownedNow?"#7cc7ff":"#ffe066");
 }
 
