@@ -1,4 +1,4 @@
-const VERSION = "3.4.2";
+const VERSION = "3.4.0";
 const CRYSTAL_WAR_MAX_PLAYERS = 3;
 const CRYSTAL_WAR_TICKET_SECONDS = 45;
 const PBKDF2_ITERATIONS = 100000;
@@ -258,8 +258,8 @@ export default {
         return await connectCrystalWarRealtimeV3(request, env, url);
       }
 
-      if (path === "/api/crystal-war/blueprints/find" && request.method === "GET") return await findCrystalBlueprint(request, env, url);
       if (path === "/api/crystal-war/blueprints" && request.method === "GET") return await listCrystalBlueprints(request, env);
+      if (path === "/api/crystal-war/blueprints/find" && request.method === "GET") return await findCrystalBlueprint(request, env, url);
       if (path === "/api/crystal-war/blueprints" && request.method === "POST") return await publishCrystalBlueprint(request, env);
 
       if (
@@ -489,6 +489,15 @@ async function ensureDatabase(db) {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY (owner_id) REFERENCES sf_users_v2(id) ON DELETE CASCADE
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS sf_guest_devices_v1 (
+      device_token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES sf_users_v2(id)
+        ON DELETE CASCADE
     )`,
 
     `CREATE INDEX IF NOT EXISTS idx_pz_cw_blueprints_owner ON pz_cw_blueprints_v1(owner_id, updated_at)`,
@@ -1164,8 +1173,45 @@ async function completeRegistration(request, env) {
 }
 
 async function createGuestSession(request, env) {
-  await readJson(request);
+  const body = await readJson(request);
   const now = unixTime();
+
+  // A guestToken identifies the *device*, not the account. When the client
+  // sends one we've seen before, resume that same guest account instead of
+  // minting a new one - this is what stops "a new account every launch".
+  const guestToken = String(body?.guestToken || "").trim();
+  const deviceHash = guestToken ? await sha256(guestToken) : "";
+
+  if (deviceHash) {
+    const mapping = await env.DB.prepare(
+      `SELECT user_id FROM sf_guest_devices_v1 WHERE device_token_hash = ?`
+    ).bind(deviceHash).first();
+
+    if (mapping && mapping.user_id) {
+      const existing = await env.DB.prepare(
+        `SELECT id, username, email, created_at, account_type
+         FROM sf_users_v2 WHERE id = ?`
+      ).bind(mapping.user_id).first();
+
+      if (existing) {
+        await env.DB.prepare(
+          `UPDATE sf_guest_devices_v1 SET last_seen_at = ? WHERE device_token_hash = ?`
+        ).bind(now, deviceHash).run();
+
+        const tokens = await createTokenPair(env.DB, existing.id);
+        return jsonResponse({
+          success: true,
+          message: "Guest身份已恢复",
+          user: publicUser(existing),
+          ...tokens
+        }, 200);
+      }
+
+      // The mapped user no longer exists (e.g. account was deleted) - fall
+      // through and create a fresh guest, then re-point the mapping below.
+    }
+  }
+
   const userId = crypto.randomUUID();
   const guestCode = randomHex(5).toUpperCase();
   const username = `Guest_${guestCode}`;
@@ -1197,6 +1243,16 @@ async function createGuestSession(request, env) {
     now,
     now
   ).run();
+
+  if (deviceHash) {
+    await env.DB.prepare(
+      `INSERT INTO sf_guest_devices_v1 (device_token_hash, user_id, created_at, last_seen_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(device_token_hash) DO UPDATE SET
+         user_id = excluded.user_id,
+         last_seen_at = excluded.last_seen_at`
+    ).bind(deviceHash, userId, now, now).run();
+  }
 
   const tokens = await createTokenPair(env.DB, userId);
   return jsonResponse({
@@ -3766,166 +3822,11 @@ function getBearerToken(request) {
   return match ? match[1].trim() : "";
 }
 
-function blueprintCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let result = "PZ-";
-  for (let index = 0; index < 8; index += 1) {
-    if (index === 4) result += "-";
-    result += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return result;
-}
-
-function blueprintDto(row) {
-  if (!row) return null;
-  let blueprint = {};
-  try {
-    blueprint = JSON.parse(row.blueprint_json || "{}");
-  } catch (_) {
-    blueprint = {};
-  }
-  return Object.assign({}, blueprint, {
-    code: row.code,
-    name: row.name,
-    description: row.description,
-    isPublic: Number(row.is_public) === 1,
-    ownerId: row.owner_id,
-    ownerName: row.owner_name || "PLAYER",
-    updatedAt: Number(row.updated_at) || 0
-  });
-}
-
-function normalizeBlueprintParts(parts) {
-  return parts.slice(0, 100).map((part, index) => ({
-    key: String(part.key || "p" + index).slice(0, 16),
-    type: String(part.type || "").slice(0, 32),
-    x: Math.floor(Number(part.x) || 0),
-    y: Math.floor(Number(part.y) || 0),
-    level: Math.max(1, Math.min(20, Math.floor(Number(part.level) || 1)))
-  }));
-}
-
-async function publishCrystalBlueprint(request, env) {
-  const session = await authenticateSupportRequest(request, env);
-  if (session.error) return session.error;
-
-  const body = await readJson(request);
-  const name = String(body.name || "").trim().slice(0, 24);
-  const description = String(body.description || "").trim().slice(0, 120);
-  const sourceParts = Array.isArray(body.parts) ? body.parts : [];
-  if (!name || sourceParts.length === 0) {
-    return errorResponse(400, "INVALID_BLUEPRINT", "蓝图名称或设备内容无效");
-  }
-
-  const blueprint = {
-    parts: normalizeBlueprintParts(sourceParts),
-    routes: Array.isArray(body.routes) ? body.routes.slice(0, 160) : [],
-    powerLinks: Array.isArray(body.powerLinks) ? body.powerLinks.slice(0, 160) : []
-  };
-  const blueprintJson = JSON.stringify(blueprint);
-  if (blueprintJson.length > 60000) {
-    return errorResponse(413, "BLUEPRINT_TOO_LARGE", "蓝图内容过大");
-  }
-
-  let code = blueprintCode();
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const existing = await env.DB.prepare(
-      "SELECT code FROM pz_cw_blueprints_v1 WHERE code = ? LIMIT 1"
-    ).bind(code).first();
-    if (!existing) break;
-    code = blueprintCode();
-  }
-
-  const timestamp = Date.now();
-  await env.DB.prepare(
-    `INSERT INTO pz_cw_blueprints_v1
-      (id, code, owner_id, name, description, is_public,
-       blueprint_json, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(
-    crypto.randomUUID(),
-    code,
-    session.user.id,
-    name,
-    description,
-    body.isPublic === true ? 1 : 0,
-    blueprintJson,
-    timestamp,
-    timestamp
-  ).run();
-
-  return jsonResponse({
-    success: true,
-    blueprint: Object.assign({}, blueprint, {
-      code,
-      name,
-      description,
-      isPublic: body.isPublic === true,
-      ownerId: session.user.id,
-      ownerName: session.user.username || "PLAYER",
-      updatedAt: timestamp
-    })
-  });
-}
-
-async function listCrystalBlueprints(request, env) {
-  const session = await authenticateSupportRequest(request, env);
-  if (session.error) return session.error;
-
-  const query = `
-    SELECT b.*,
-           COALESCE(p.display_name, u.username, 'PLAYER') AS owner_name
-      FROM pz_cw_blueprints_v1 AS b
-      LEFT JOIN pz_public_profiles_v1 AS p ON p.user_id = b.owner_id
-      LEFT JOIN sf_users_v2 AS u ON u.id = b.owner_id
-     WHERE b.owner_id = ?
-        OR (
-          b.is_public = 1
-          AND EXISTS (
-            SELECT 1 FROM pz_friendships_v1 AS f
-             WHERE (f.user_low = ? AND f.user_high = b.owner_id)
-                OR (f.user_high = ? AND f.user_low = b.owner_id)
-          )
-        )
-     ORDER BY b.updated_at DESC
-     LIMIT 50`;
-  const rows = await env.DB.prepare(query)
-    .bind(session.user.id, session.user.id, session.user.id)
-    .all();
-  return jsonResponse({
-    success: true,
-    blueprints: (rows.results || []).map(blueprintDto)
-  });
-}
-
-async function findCrystalBlueprint(request, env, url) {
-  const session = await authenticateSupportRequest(request, env);
-  if (session.error) return session.error;
-
-  const code = String(url.searchParams.get("code") || "")
-    .trim()
-    .toUpperCase();
-  if (!code) {
-    return errorResponse(400, "BLUEPRINT_CODE_REQUIRED", "请输入蓝图编码");
-  }
-
-  const query = `
-    SELECT b.*,
-           COALESCE(p.display_name, u.username, 'PLAYER') AS owner_name
-      FROM pz_cw_blueprints_v1 AS b
-      LEFT JOIN pz_public_profiles_v1 AS p ON p.user_id = b.owner_id
-      LEFT JOIN sf_users_v2 AS u ON u.id = b.owner_id
-     WHERE b.code = ?
-       AND (b.owner_id = ? OR b.is_public = 1)
-     LIMIT 1`;
-  const row = await env.DB.prepare(query)
-    .bind(code, session.user.id)
-    .first();
-  if (!row) {
-    return errorResponse(404, "BLUEPRINT_NOT_FOUND", "不存在此蓝图");
-  }
-  return jsonResponse({ success: true, blueprint: blueprintDto(row) });
-}
+function blueprintCode(){const alphabet="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let out="PZ-";for(let i=0;i<8;i++){if(i===4)out+="-";out+=alphabet[Math.floor(Math.random()*alphabet.length)];}return out;}
+function blueprintDto(row){if(!row)return null;let data={};try{data=JSON.parse(row.blueprint_json||"{}");}catch(_){}return {...data,code:row.code,name:row.name,description:row.description,isPublic:Number(row.is_public)===1,ownerId:row.owner_id,ownerName:row.owner_name||"PLAYER",updatedAt:Number(row.updated_at)||0};}
+async function publishCrystalBlueprint(request,env){const session=await authenticateSupportRequest(request,env);if(session.error)return session.error;const body=await readJson(request),name=String(body.name||"").trim().slice(0,24),description=String(body.description||"").trim().slice(0,120),parts=Array.isArray(body.parts)?body.parts.slice(0,100):[];if(!name||!parts.length)return errorResponse(400,"INVALID_BLUEPRINT","蓝图名称或设备内容无效");const safe={parts:parts.map((p,i)=>({key:String(p.key||"p"+i).slice(0,16),type:String(p.type||"").slice(0,32),x:Math.floor(Number(p.x)||0),y:Math.floor(Number(p.y)||0),level:Math.max(1,Math.min(20,Math.floor(Number(p.level)||1)))}),routes:Array.isArray(body.routes)?body.routes.slice(0,160):[],powerLinks:Array.isArray(body.powerLinks)?body.powerLinks.slice(0,160):[]},text=JSON.stringify(safe);if(text.length>60000)return errorResponse(413,"BLUEPRINT_TOO_LARGE","蓝图内容过大");let code=blueprintCode();for(let i=0;i<6;i++){const exists=await env.DB.prepare(`SELECT 1 FROM pz_cw_blueprints_v1 WHERE code=?`).bind(code).first();if(!exists)break;code=blueprintCode();}const at=Date.now();await env.DB.prepare(`INSERT INTO pz_cw_blueprints_v1(id,code,owner_id,name,description,is_public,blueprint_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),code,session.user.id,name,description,body.isPublic===true?1:0,text,at,at).run();return jsonResponse({success:true,blueprint:{...safe,code,name,description,isPublic:body.isPublic===true,ownerId:session.user.id,ownerName:session.user.username||"PLAYER",updatedAt:at}});}
+async function listCrystalBlueprints(request,env){const session=await authenticateSupportRequest(request,env);if(session.error)return session.error;const rows=await env.DB.prepare(`SELECT b.*,COALESCE(p.display_name,u.username,'PLAYER') owner_name FROM pz_cw_blueprints_v1 b LEFT JOIN pz_public_profiles_v1 p ON p.user_id=b.owner_id LEFT JOIN sf_users_v2 u ON u.id=b.owner_id WHERE b.owner_id=? OR (b.is_public=1 AND EXISTS(SELECT 1 FROM pz_friendships_v1 f WHERE (f.user_low=? AND f.user_high=b.owner_id) OR (f.user_high=? AND f.user_low=b.owner_id))) ORDER BY b.updated_at DESC LIMIT 50`).bind(session.user.id,session.user.id,session.user.id).all();return jsonResponse({success:true,blueprints:(rows.results||[]).map(blueprintDto)});}
+async function findCrystalBlueprint(request,env,url){const session=await authenticateSupportRequest(request,env);if(session.error)return session.error;const code=String(url.searchParams.get("code")||"").trim().toUpperCase();const row=await env.DB.prepare(`SELECT b.*,COALESCE(p.display_name,u.username,'PLAYER') owner_name FROM pz_cw_blueprints_v1 b LEFT JOIN pz_public_profiles_v1 p ON p.user_id=b.owner_id LEFT JOIN sf_users_v2 u ON u.id=b.owner_id WHERE b.code=? AND (b.owner_id=? OR b.is_public=1) LIMIT 1`).bind(code,session.user.id).first();if(!row)return errorResponse(404,"BLUEPRINT_NOT_FOUND","不存在此蓝图");return jsonResponse({success:true,blueprint:blueprintDto(row)});}
 
 async function readJson(request) {
   const contentType =

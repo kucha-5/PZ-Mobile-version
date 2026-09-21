@@ -3216,7 +3216,8 @@ async function accountGuestFlow(){
     let apiUser=window.PZAccount.user;
     if(!apiUser||!(apiUser.isGuest||apiUser.accountType==="guest")){
       try{await window.PZAccount.logout();}catch(e){window.PZAccount.clear();}
-      const result=await window.PZAccount.guest();
+      const deviceGuestToken=window.PZMobileAccountSession.deviceGuestToken();
+      const result=await window.PZAccount.guest(deviceGuestToken);
       apiUser=result.user;
     }
     if(sessionToken!==cloudSessionToken)return;
