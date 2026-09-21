@@ -1,0 +1,27 @@
+name = "sf-account"
+main = "sf-account-worker.js"
+compatibility_date = "2026-01-01"
+
+# D1 database binding used as `env.DB` throughout sf-account-worker.js.
+# Replace database_id with your actual D1 database id
+# (`wrangler d1 list` to find it, or the Cloudflare dashboard > D1).
+[[d1_databases]]
+binding = "DB"
+database_name = "sf-account-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# Durable Object used for Crystal War realtime rooms (`env.CRYSTAL_WAR_ROOMS`).
+[[durable_objects.bindings]]
+name = "CRYSTAL_WAR_ROOMS"
+class_name = "PZCrystalWarRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["PZCrystalWarRoom"]
+
+# Plain vars / secrets referenced in the worker (checkEnv-style guards near
+# the top of the file). Set the real values with:
+#   wrangler secret put SF_MAIL_SECRET
+# APPS_SCRIPT_URL can stay as a plain var if it's not sensitive:
+# [vars]
+# APPS_SCRIPT_URL = "https://script.google.com/macros/s/xxx/exec"
