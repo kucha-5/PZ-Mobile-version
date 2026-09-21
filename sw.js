@@ -5,7 +5,7 @@ const BUILD=params.get("build")||"stable";
 const CACHE_NAME="project-zero-web-v4-"+BUILD;
 const CORE_FILES=[
   "./","./index.html","./style.css","./manifest.webmanifest","./version.json","./account-config.js","./pz-account-api.js","./update-client.js",
-  "./locales.js","./story_scripts.js","./story_events.js","./story_engine.js",
+  "./locales.js","./pz-mobile-account-session.js","./game_executor_model_data.js","./story_scripts.js","./story_events.js","./story_engine.js",
   "./story_chapter0_zh.js","./story_chapter0_en.js","./story_chapter1_zh.js","./story_chapter1_en.js",
   "./story_chapter2_zh.js","./story_chapter2_en.js","./story_chapter3_zh.js","./story_chapter3_en.js","./story_expansion_v49322.js","./game_crystal_modules.js","./game.js",
   "./game_match3.js","./game_quality_update.js","./game_patrol.js","./game_side_story.js","./game_daydream.js","./game_daydream_title.js","./game_crystal_war.js",

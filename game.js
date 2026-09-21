@@ -2347,21 +2347,16 @@ const ROADMAP_NOTES = {
 
 const LEGACY_SAVE_KEY = "project_zero_v25_save";
 const GUEST_SAVE_KEY = "project_zero_v25_guest_save";
-const GUEST_SESSION_ACTIVE_KEY = "project_zero_guest_session_active_v1";
-const MOBILE_TRUSTED_ACCOUNT_UID_KEY = "project_zero_mobile_trusted_account_uid_v1";
-function trustedMobileAccountUid(){try{return String(localStorage.getItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY)||"");}catch(_){return "";}}
-function trustMobileAccount(uid){try{if(uid)localStorage.setItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY,String(uid));}catch(_){}}
-function forgetTrustedMobileAccount(){try{localStorage.removeItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY);}catch(_){}}
+if(!window.PZMobileAccountSession)throw new Error("PZ_MOBILE_ACCOUNT_SESSION_MODULE_MISSING");
+const trustedMobileAccountUid=()=>window.PZMobileAccountSession.trustedUid();
+const trustMobileAccount=uid=>window.PZMobileAccountSession.trust(uid);
+const forgetTrustedMobileAccount=()=>window.PZMobileAccountSession.forget();
 const CLOUD_SAVE_KEY_PREFIX = "project_zero_v25_cloud_";
 function storedGuestSessionActive(){
-  try{ return localStorage.getItem(GUEST_SESSION_ACTIVE_KEY) === "1"; }
-  catch(e){ return false; }
+  return window.PZMobileAccountSession.isGuestActive();
 }
 function setStoredGuestSessionActive(active){
-  try{
-    if(active) localStorage.setItem(GUEST_SESSION_ACTIVE_KEY,"1");
-    else localStorage.removeItem(GUEST_SESSION_ACTIVE_KEY);
-  }catch(e){}
+  window.PZMobileAccountSession.setGuestActive(active);
 }
 function cloudAccountSaveKey(uid){ return CLOUD_SAVE_KEY_PREFIX + String(uid || "unknown"); }
 function activeSaveKey(){
@@ -2555,7 +2550,7 @@ let accountMsg = "";
 let accountBusy = false;
 let accountFocusedField = "email";
 let accountAuthed = false;
-let guestMode = storedGuestSessionActive();
+let guestMode = false;
 let cloudSyncStatus = "";
 let cloudSyncTimer = 0;
 
@@ -2571,7 +2566,7 @@ let cloudApplyingRemote = false;
 let cloudBootListenerAttached = false;
 let cloudAuthStateResolved = false;
 let mobileAccountStartReadyAt = performance.now()+1200;
-let explicitGuestSession = guestMode;
+let explicitGuestSession = false;
 let deletionPromptActive = false;
 let deletionScheduledAtMs = 0;
 let accountDeletionConfirmStep = 0;
@@ -3263,10 +3258,8 @@ window.ensureProjectZeroOnlineIdentity=async function(){
   }else{
     apiUser=window.PZAccount.user;
   }
-  if(!apiUser&&guestMode){
-    const result=await window.PZAccount.guest();
-    apiUser=result&&result.user||window.PZAccount.user;
-  }
+  // Never manufacture an anonymous account from a stale local Guest flag.
+  // Creating a Guest identity is reserved for the explicit Guest button flow.
   if(!apiUser)return null;
   cloudUser=cloudUserFromApi(apiUser);
   accountAuthed=true;
@@ -5536,7 +5529,7 @@ function updateExecutorIdle(active){
   if(executorIdle.timer>0){executorIdle.timer=Math.max(0,executorIdle.timer-frameScale);if(executorIdle.timer<=0){executorIdle.animation="";executorIdle.quiet=0;executorIdle.next=180+Math.random()*240;}return;}
   executorIdle.quiet+=frameScale;
   if(executorIdle.quiet<executorIdle.next)return;
-  const sets=[["bladeCheck","shoulderRoll","lookAround"],["bowTune","hairFix","lookAround"],["dualSpin","hoodCheck","lookAround"],["focusOrb","sleeveFix","lookAround"],["coatFix","bladeCheck","lookAround"],["staffBalance","medicalCheck","lookAround"],["shieldBrace","gauntletCheck","lookAround"],["katanaSheath","crystalCheck","lookAround"]];
+  const sets=window.PZExecutorModelData?.idleSets||[];
   const list=sets[player.role]||sets[4];executorIdle.animation=list[Math.floor(Math.random()*list.length)];executorIdle.duration=120+Math.random()*100;executorIdle.timer=executorIdle.duration;
 }
 function executorIdlePose(){
@@ -20034,16 +20027,7 @@ function drawEnemy(e){ if(!e.alive)return; ctx.save(); ctx.translate(e.x,e.y); i
   const enemyLabel=e.type==="fireCrystal"?(language==="en"?"FIRE CRYSTAL":"火焰晶体"):e.type.toUpperCase();
   ctx.fillText(e.boss?"BOSS":enemyLabel,0,e.r+18); if(lockTarget===e){ctx.strokeStyle="#ffe066";ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,e.r+10,0,Math.PI*2);ctx.stroke();} ctx.restore(); }
 function drawPortraitBasedBattleModel(roleId,radius,direction,moving,weaponSwing,idlePose={name:"",phase:0,lift:0,turn:0,weapon:0}){
-  const presets={
-    0:{skin:"#efd3c5",hair:"#6d4731",outer:"#17191f",outerShade:"#090b10",inner:"#b59660",innerShade:"#785c38",accent:"#8f2724",trim:"#d8dbe2",boot:"#5b2b24",weapon:"#e9edf3",edge:"#ffbe5c"},
-    1:{skin:"#efd5c6",hair:"#26c7b5",outer:"#278f7c",outerShade:"#145449",inner:"#788f8b",innerShade:"#354a48",accent:"#b18562",trim:"#dce8e5",boot:"#172f2e",weapon:"#d9a735",edge:"#74ffb7"},
-    2:{skin:"#e8c9bd",hair:"#342f45",outer:"#302744",outerShade:"#15121f",inner:"#5f526d",innerShade:"#282331",accent:"#b47cff",trim:"#b8a6d8",boot:"#17131e",weapon:"#d8c7ff",edge:"#b47cff"},
-    3:{skin:"#efd8cf",hair:"#5554a4",outer:"#f2f4f8",outerShade:"#b9c4d5",inner:"#f8fafc",innerShade:"#25364a",accent:"#1d2f45",trim:"#ffffff",boot:"#6d4028",weapon:"#88d8ff",edge:"#d9f4ff"},
-    4:{skin:"#e7d2c8",hair:"#111318",outer:"#17191d",outerShade:"#07080b",inner:"#eef1f4",innerShade:"#6d727b",accent:"#2a2e35",trim:"#ffffff",boot:"#111318",weapon:"#dfe6ef",edge:"#939aa5"},
-    5:{skin:"#eed1c6",hair:"#d9e2ec",outer:"#29384a",outerShade:"#111a25",inner:"#d8e4ed",innerShade:"#637487",accent:"#78f0c3",trim:"#eaf7ff",boot:"#172330",weapon:"#bdebdc",edge:"#78f0c3"},
-    6:{skin:"#eacdbf",hair:"#d8b16a",outer:"#315a78",outerShade:"#152b3d",inner:"#8fb8cd",innerShade:"#36576b",accent:"#5db8ff",trim:"#d9f2ff",boot:"#1b3040",weapon:"#dcebf4",edge:"#5db8ff"},
-    7:{skin:"#ead0c5",hair:"#161b23",outer:"#243741",outerShade:"#0d171d",inner:"#6b8791",innerShade:"#2a414a",accent:"#65e6ff",trim:"#d9fbff",boot:"#111c22",weapon:"#e7fbff",edge:"#65e6ff"}
-  };
+  const presets=window.PZExecutorModelData?.palettes||{};
   const p=presets[roleId];if(!p)return false;
   const s=radius/20,dir=direction<0?-1:1,baseAlpha=ctx.globalAlpha;ctx.save();ctx.scale(s,s);if(idlePose.name){ctx.translate(idlePose.turn*1.2,-idlePose.lift*.8);ctx.rotate(idlePose.turn*.025);}
   ctx.fillStyle=p.outerShade;ctx.beginPath();ctx.moveTo(-18,-4);ctx.quadraticCurveTo(-25,10,-19,22);ctx.lineTo(-4,18);ctx.lineTo(0,4);ctx.closePath();ctx.fill();

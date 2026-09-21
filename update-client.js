@@ -3,7 +3,7 @@
 
   const VERSION_URL="version.json";
   const LOCAL_VERSION="49.36.0";
-  const LOCAL_BUILD="2026091302-mobile-ailo-portrait-tuning";
+  const LOCAL_BUILD="2026092101-mobile-modular-account-guard";
   const FILE_RUNTIME=location.protocol==="file:";
   const BUILD_KEY="pz_runtime_build";
   const VERSION_KEY="pz_runtime_version";
@@ -12,7 +12,7 @@
 
   // Only these files are required for the main canvas runtime. Feature modules
   // are isolated below so one incomplete GitHub upload cannot block the game.
-  const REQUIRED_BEFORE_GAME=["locales.js","game_crystal_modules.js"];
+  const REQUIRED_BEFORE_GAME=["locales.js","pz-mobile-account-session.js","game_executor_model_data.js","game_crystal_modules.js"];
   const OPTIONAL_BEFORE_GAME=[
     "story_scripts.js","story_events.js","story_engine.js",
     "story_chapter0_zh.js","story_chapter0_en.js",

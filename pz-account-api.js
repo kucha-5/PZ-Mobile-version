@@ -5,7 +5,6 @@
   let accessToken="";
   let refreshToken=localStorage.getItem(REFRESH_KEY)||"";
   let user=null;
-  try{ user=JSON.parse(localStorage.getItem(USER_KEY)||"null"); }catch(_){ user=null; }
 
   function base(){ return String(window.PZ_ACCOUNT_API_BASE||"").replace(/\/$/,""); }
   function enabled(){ return /^https?:\/\//i.test(base()); }
@@ -45,6 +44,7 @@
   async function refresh(){
     if(!refreshToken) throw new Error("NO_ACCOUNT_SESSION");
     const body=await request("/api/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken})},false);
+    if(!body.user)throw new Error("ACCOUNT_REFRESH_IDENTITY_MISSING");
     remember(body); return body;
   }
   async function restore(){

@@ -1,12 +1,14 @@
 {
   "version": "49.36.0",
-  "build": "2026091302-mobile-ailo-portrait-tuning",
+  "build": "2026092101-mobile-modular-account-guard",
   "edition": "mobile",
   "publishedAt": "2026-08-29T12:00:00Z",
   "mandatory": false,
   "minimumLauncherVersion": "1.0.0",
   "saveSchemaVersion": 80,
   "changelog": [
+    "修复旧Guest标记在联机入口静默创建陌生匿名账号；游客身份现在只能由玩家明确选择后创建",
+    "将手机版账号会话保护与执行官模型配置从game.js拆分为独立模块，降低核心脚本耦合并便于单独更新",
     "替换为艾洛透明背景原始PNG；大厅立绘缩小，执行官卡片与详情放大，常驻招募视觉高度对齐凯恩",
     "接入艾洛原始1640×2360 RGBA PNG立绘，用于执行官列表与详情、常驻招募以及大厅展示选择和实际大厅展示",
     "撤回Mobile暂停菜单重做，恢复原有暂停菜单外观与按钮尺寸，仅修复暂停时底层HUD错误回退PC布局",
