@@ -2348,6 +2348,10 @@ const ROADMAP_NOTES = {
 const LEGACY_SAVE_KEY = "project_zero_v25_save";
 const GUEST_SAVE_KEY = "project_zero_v25_guest_save";
 const GUEST_SESSION_ACTIVE_KEY = "project_zero_guest_session_active_v1";
+const MOBILE_TRUSTED_ACCOUNT_UID_KEY = "project_zero_mobile_trusted_account_uid_v1";
+function trustedMobileAccountUid(){try{return String(localStorage.getItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY)||"");}catch(_){return "";}}
+function trustMobileAccount(uid){try{if(uid)localStorage.setItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY,String(uid));}catch(_){}}
+function forgetTrustedMobileAccount(){try{localStorage.removeItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY);}catch(_){}}
 const CLOUD_SAVE_KEY_PREFIX = "project_zero_v25_cloud_";
 function storedGuestSessionActive(){
   try{ return localStorage.getItem(GUEST_SESSION_ACTIVE_KEY) === "1"; }
@@ -3034,12 +3038,14 @@ async function accountLoginFlow(overwriteConfirmed=false){
       setAccountMsg(transferSynced
         ? (language==="en"?"Signed in. This unused SF Account is now bound to your guest progress.":"登录成功，该未建立游戏档案的 SF Account 已绑定游客进度。")
         : (language==="en"?"Account bound locally. Cloud sync will retry automatically.":"账号已在本地完成绑定，云端同步将自动重试。"),180);
+      trustMobileAccount(cloudUser.uid);
       return;
     }
     guestMode = false;
     explicitGuestSession = false;
     setStoredGuestSessionActive(false);
     discardGuestAfterAccountStart=false;
+    trustMobileAccount(cloudUser.uid);
     // Authentication alone does not delete the guest slot. The confirmed
     // overwrite is finalized only after Tap to Start resolves this UID's save.
     if(accountCredentialPanelActive){
@@ -3117,6 +3123,7 @@ async function accountRegisterFlow(){
     setStoredGuestSessionActive(false);
     cloudInitialSyncDone = false;
     cloudPendingSave = false;
+    trustMobileAccount(cloudUser.uid);
     const accountKey=cloudAccountSaveKey(cloudUser.uid);
     if(guestTransfer){
       const migrated=JSON.parse(JSON.stringify(guestTransfer.parsed));
@@ -3221,6 +3228,7 @@ async function accountGuestFlow(){
     cloudUser=cloudUserFromApi(apiUser);
     guestMode=true;
     setStoredGuestSessionActive(true);
+    trustMobileAccount(cloudUser.uid);
     accountAuthed=true;
     cloudInitialSyncDone=false;
     cloudPendingSave=false;
@@ -3447,6 +3455,7 @@ async function signOutAndClearLocal(skipCloudSave=false){
   cloudSessionToken++;
   explicitGuestSession = false;
   setStoredGuestSessionActive(false);
+  forgetTrustedMobileAccount();
   if(!skipCloudSave){ try{ if(cloudUser && hasCreatedProfile) await autoCloudSaveNow(true); }catch(err){ console.warn("[SignOutSave]", err); } }
   try{
     if(window.PZAccount) await window.PZAccount.logout();
@@ -3481,6 +3490,15 @@ async function bootAccountSession(){
     cloudAuthStateResolved = true;
     if(!restored){ cloudUser=null; accountAuthed=false; return; }
     cloudUser=cloudUserFromApi(restored);
+    const trustedUid=trustedMobileAccountUid();
+    if(!cloudUser?.uid||trustedUid!==cloudUser.uid){
+      console.warn("[MobileAccount] discarded untrusted cached session",cloudUser?.uid||"");
+      try{window.PZAccount?.clear?.();}catch(_){}
+      cloudUser=null;accountAuthed=false;guestMode=false;explicitGuestSession=false;setStoredGuestSessionActive(false);
+      resetRuntimeDefaults();reloadAccountScopedGameplay(false);gameMode="login";
+      setAccountMsg(language==="en"?"A cached account from another session was removed. Please sign in.":"已移除未经本设备确认的缓存账号，请重新登录。",180);
+      return;
+    }
     accountAuthed=true;
     if(cloudUser&&cloudUser.isGuest){
       guestMode=storedGuestSessionActive();
@@ -3764,6 +3782,7 @@ async function exitLocalGuestSession(){
   }
   cloudSessionToken++;
   setStoredGuestSessionActive(false);
+  forgetTrustedMobileAccount();
   explicitGuestSession=false;
   guestMode=false;
   accountAuthed=false;
