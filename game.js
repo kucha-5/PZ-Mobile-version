@@ -1554,7 +1554,7 @@ function handleMobileTouchStart(e){
       }
     }
     if(mobileInput.uiTouchId===null){
-      const deferTap=gameMode==="operators"||gameMode==="achievements"||gameMode==="warehouse"||gameMode==="actionRecord"||gameMode==="team"||(gameMode==="operation"&&selectedTab==="dualCrystal")||(gameMode==="shop"&&shopTab==="recruit")||(gameMode==="lobby"&&lobbyAssistantSelectorOpen);
+      const deferTap=gameMode==="operators"||gameMode==="achievements"||gameMode==="warehouse"||gameMode==="actionRecord"||gameMode==="team"||(gameMode==="operation"&&selectedTab==="dualCrystal")||(gameMode==="shop"&&(shopTab==="recruit"||shopTab==="weapon"))||(gameMode==="lobby"&&lobbyAssistantSelectorOpen);
       mobileInput.uiTouchId=t.identifier;mobileInput.pointerActive=true;mouseDown=true;clicked=!deferTap;mobileInput.uiDeferredTap=deferTap;mobileInput.uiStartX=mobileInput.uiLastX=p.x;mobileInput.uiStartY=mobileInput.uiLastY=p.y;mobileInput.uiStartAt=performance.now();mobileInput.uiMoved=false;mobileInput.uiAxis="";mobileInput.scrollAccum=0;mobileInput.touchActions[t.identifier]="ui";if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerDown?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerDown?.(p.x,p.y);if(!deferTap)sfx("ui");
     }
   }
@@ -1587,6 +1587,8 @@ function handleMobileTouchMove(e){
         }else if(gameMode==="shop"&&shopTab==="recruit"&&shopSubTab==="permanent"&&mobileInput.uiStartY>=230&&mobileInput.uiStartY<=550){
           if(mobileInput.uiAxis==="x")shopRecruitScrollX=clamp(shopRecruitScrollX-dx,0,permanentRecruitMaxScroll());
           else shopRecruitWheelDelta+=-dy;
+        }else if(gameMode==="shop"&&shopTab==="weapon"&&shopSubTab==="permanent"&&mobileInput.uiStartY>=350&&mobileInput.uiStartY<=540){
+          shopWeaponScrollX=clamp(shopWeaponScrollX-(mobileInput.uiAxis==="x"?dx:dy),0,permanentWeaponMaxScroll());
         }else applyMobileSwipeDelta(dx,dy,p);
       }
       mobileInput.uiLastX=p.x;mobileInput.uiLastY=p.y;
@@ -2346,6 +2348,10 @@ const ROADMAP_NOTES = {
 const LEGACY_SAVE_KEY = "project_zero_v25_save";
 const GUEST_SAVE_KEY = "project_zero_v25_guest_save";
 const GUEST_SESSION_ACTIVE_KEY = "project_zero_guest_session_active_v1";
+const MOBILE_TRUSTED_ACCOUNT_UID_KEY = "project_zero_mobile_trusted_account_uid_v1";
+function trustedMobileAccountUid(){try{return String(localStorage.getItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY)||"");}catch(_){return "";}}
+function trustMobileAccount(uid){try{if(uid)localStorage.setItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY,String(uid));}catch(_){}}
+function forgetTrustedMobileAccount(){try{localStorage.removeItem(MOBILE_TRUSTED_ACCOUNT_UID_KEY);}catch(_){}}
 const CLOUD_SAVE_KEY_PREFIX = "project_zero_v25_cloud_";
 function storedGuestSessionActive(){
   try{ return localStorage.getItem(GUEST_SESSION_ACTIVE_KEY) === "1"; }
@@ -2564,6 +2570,7 @@ let cloudInitialSyncDone = false;
 let cloudApplyingRemote = false;
 let cloudBootListenerAttached = false;
 let cloudAuthStateResolved = false;
+let mobileAccountStartReadyAt = performance.now()+1200;
 let explicitGuestSession = guestMode;
 let deletionPromptActive = false;
 let deletionScheduledAtMs = 0;
@@ -2723,6 +2730,7 @@ function initCloudSave(){
   cloudUser=cloudUserFromApi(u);
   cloudPersistenceReady=window.PZAccount.restore().then(restored=>{
     cloudUser=cloudUserFromApi(restored);
+    mobileAccountStartReadyAt=performance.now()+700;
     return restored;
   }).catch(error=>{ console.warn("[SF Account restore]",error); cloudUser=null; return null; });
   return true;
@@ -3030,12 +3038,14 @@ async function accountLoginFlow(overwriteConfirmed=false){
       setAccountMsg(transferSynced
         ? (language==="en"?"Signed in. This unused SF Account is now bound to your guest progress.":"登录成功，该未建立游戏档案的 SF Account 已绑定游客进度。")
         : (language==="en"?"Account bound locally. Cloud sync will retry automatically.":"账号已在本地完成绑定，云端同步将自动重试。"),180);
+      trustMobileAccount(cloudUser.uid);
       return;
     }
     guestMode = false;
     explicitGuestSession = false;
     setStoredGuestSessionActive(false);
     discardGuestAfterAccountStart=false;
+    trustMobileAccount(cloudUser.uid);
     // Authentication alone does not delete the guest slot. The confirmed
     // overwrite is finalized only after Tap to Start resolves this UID's save.
     if(accountCredentialPanelActive){
@@ -3113,6 +3123,7 @@ async function accountRegisterFlow(){
     setStoredGuestSessionActive(false);
     cloudInitialSyncDone = false;
     cloudPendingSave = false;
+    trustMobileAccount(cloudUser.uid);
     const accountKey=cloudAccountSaveKey(cloudUser.uid);
     if(guestTransfer){
       const migrated=JSON.parse(JSON.stringify(guestTransfer.parsed));
@@ -3217,6 +3228,7 @@ async function accountGuestFlow(){
     cloudUser=cloudUserFromApi(apiUser);
     guestMode=true;
     setStoredGuestSessionActive(true);
+    trustMobileAccount(cloudUser.uid);
     accountAuthed=true;
     cloudInitialSyncDone=false;
     cloudPendingSave=false;
@@ -3443,6 +3455,7 @@ async function signOutAndClearLocal(skipCloudSave=false){
   cloudSessionToken++;
   explicitGuestSession = false;
   setStoredGuestSessionActive(false);
+  forgetTrustedMobileAccount();
   if(!skipCloudSave){ try{ if(cloudUser && hasCreatedProfile) await autoCloudSaveNow(true); }catch(err){ console.warn("[SignOutSave]", err); } }
   try{
     if(window.PZAccount) await window.PZAccount.logout();
@@ -3477,6 +3490,15 @@ async function bootAccountSession(){
     cloudAuthStateResolved = true;
     if(!restored){ cloudUser=null; accountAuthed=false; return; }
     cloudUser=cloudUserFromApi(restored);
+    const trustedUid=trustedMobileAccountUid();
+    if(!cloudUser?.uid||trustedUid!==cloudUser.uid){
+      console.warn("[MobileAccount] discarded untrusted cached session",cloudUser?.uid||"");
+      try{window.PZAccount?.clear?.();}catch(_){}
+      cloudUser=null;accountAuthed=false;guestMode=false;explicitGuestSession=false;setStoredGuestSessionActive(false);
+      resetRuntimeDefaults();reloadAccountScopedGameplay(false);gameMode="login";
+      setAccountMsg(language==="en"?"A cached account from another session was removed. Please sign in.":"已移除未经本设备确认的缓存账号，请重新登录。",180);
+      return;
+    }
     accountAuthed=true;
     if(cloudUser&&cloudUser.isGuest){
       guestMode=storedGuestSessionActive();
@@ -3760,6 +3782,7 @@ async function exitLocalGuestSession(){
   }
   cloudSessionToken++;
   setStoredGuestSessionActive(false);
+  forgetTrustedMobileAccount();
   explicitGuestSession=false;
   guestMode=false;
   accountAuthed=false;
@@ -5125,6 +5148,7 @@ let shopRecruitScrollY = 0;
 let shopRecruitDrag = null;
 let shopLimitedScrollY = 0;
 let shopLimitedWheelDelta = 0;
+let shopWeaponScrollX = 0;
 let boughtPacks = {starter:false, growth:false, weapon:false};
 const STAGE_BACKGROUNDS = I18N_RES.STAGE_BACKGROUNDS || {
   zh:["事务处前街","石桥商业街","旧钟楼侧巷","蓝轨广场","下城区入口","旧城区边缘","废弃仓库","异常信号点","夜色长街","事务处外墙","雷文哈多守卫点"],
@@ -5504,6 +5528,22 @@ function selectStoryReply(index){
 let settlement = {stage:1, reward:0, stars:3};
 
 const player = {x:W/2,y:H/2+115,vx:0,vy:0,r:20,hp:100,energy:80,ult:1600,role:0,facing:1,attackCd:0,skillCd:0,ultCd:0,dashCd:0,inv:0,chain:0,chainTimer:0,guardTimer:0,parryReady:0,parryTarget:null,perfectBuff:0,switchCd:0};
+const executorIdle={role:-1,quiet:0,animation:"",timer:0,duration:0,next:180};
+function resetExecutorIdle(){executorIdle.role=player.role;executorIdle.quiet=0;executorIdle.animation="";executorIdle.timer=0;executorIdle.duration=0;executorIdle.next=150+Math.random()*180;}
+function updateExecutorIdle(active){
+  if(executorIdle.role!==player.role)resetExecutorIdle();
+  if(active){resetExecutorIdle();return;}
+  if(executorIdle.timer>0){executorIdle.timer=Math.max(0,executorIdle.timer-frameScale);if(executorIdle.timer<=0){executorIdle.animation="";executorIdle.quiet=0;executorIdle.next=180+Math.random()*240;}return;}
+  executorIdle.quiet+=frameScale;
+  if(executorIdle.quiet<executorIdle.next)return;
+  const sets=[["bladeCheck","shoulderRoll","lookAround"],["bowTune","hairFix","lookAround"],["dualSpin","hoodCheck","lookAround"],["focusOrb","sleeveFix","lookAround"],["coatFix","bladeCheck","lookAround"],["staffBalance","medicalCheck","lookAround"],["shieldBrace","gauntletCheck","lookAround"],["katanaSheath","crystalCheck","lookAround"]];
+  const list=sets[player.role]||sets[4];executorIdle.animation=list[Math.floor(Math.random()*list.length)];executorIdle.duration=120+Math.random()*100;executorIdle.timer=executorIdle.duration;
+}
+function executorIdlePose(){
+  if(!executorIdle.animation||executorIdle.duration<=0)return{name:"",phase:0,lift:0,turn:0,weapon:0};
+  const progress=1-executorIdle.timer/executorIdle.duration,ease=Math.sin(progress*Math.PI),wave=Math.sin(progress*Math.PI*2);
+  return{name:executorIdle.animation,phase:progress,lift:ease,turn:wave,weapon:ease};
+}
 let enemies = [], particles = [], slashes = [], texts = [], projectiles = [], frostFields = [];
 let enemySerial = 0;
 let ult = {active:false,timer:0,role:0,hitDone:false};
@@ -9539,20 +9579,26 @@ function updateLogin(){
   }
 
   if(cloudUser && !guestMode){
-    if(clicked || justPressed("enter") || justPressed(" ")){
+    const canStart=cloudAuthStateResolved&&performance.now()>=mobileAccountStartReadyAt;
+    if((clicked&&inRect(W/2-155,H/2-18,310,62)&&canStart) || ((justPressed("enter")||justPressed(" "))&&canStart)){
       clicked=false;
       startLoggedInAccountGame();
+    }else if(clicked&&inRect(W/2-125,H/2+82,250,40)){
+      clicked=false;signOutAndClearLocal(true);
     }
     clicked=false;
     return;
   }
 
   if(guestMode && hasCreatedProfile && validPlayerName(playerName)){
-    if(clicked || justPressed("enter") || justPressed(" ")){
+    const canStart=performance.now()>=mobileAccountStartReadyAt;
+    if((clicked&&inRect(W/2-155,H/2-18,310,62)&&canStart) || ((justPressed("enter")||justPressed(" "))&&canStart)){
       clicked=false;
       setStoredGuestSessionActive(true);
       explicitGuestSession=true;
       startLoading(startTargetAfterAuth());
+    }else if(clicked&&inRect(W/2-125,H/2+82,250,40)){
+      clicked=false;exitLocalGuestSession();
     }
     clicked=false;
     return;
@@ -11025,6 +11071,7 @@ function permanentRecruitMaxScroll(){
   return Math.max(0,items.length*(cardW+gap)-gap-visibleW);
 }
 function permanentRecruitMaxVerticalScroll(){ return 300; }
+function permanentWeaponMaxScroll(){const count=permanentWeaponCatalog().length;return Math.max(0,count*245-15-980);}
 const SHOP_PACKS=[
   {id:"starter",cat:1,accent:"#7cffb2",zh:"启程补给",en:"Starter Supply",descZh:"经验书×8 · 金币×8000 · 水晶×180",descEn:"EXP ×8 · Gold ×8,000 · Crystal ×180",price:"$0.99",limitZh:"永久限购1次",limitEn:"ONE-TIME"},
   {id:"tactical",cat:2,accent:"#ff8d72",zh:"战术支援",en:"Tactical Support",descZh:"武器素材×8 · 经验书×12 · 水晶×720",descEn:"Ore ×8 · EXP ×12 · Crystal ×720",price:"$9.99",limitZh:"限时限购1次",limitEn:"LIMITED · 1"},
@@ -11215,7 +11262,7 @@ function updateShop(){
       if(shopSubTab==="permanent"){
         const catalog=permanentWeaponCatalog();
         for(let n=0;n<catalog.length;n++){
-          const col=n%4,row=Math.floor(n/4),cx=70+col*245,cy=366+row*68;
+          const cx=70+n*245-shopWeaponScrollX,cy=382;
           if(inRect(cx,cy,230,58)){shopWeaponSelectedId=catalog[n].id;shopMsg=language==="en"?"Weapon details selected.":"已切换武器详情。";break;}
         }
         const selected=weaponData(shopWeaponSelectedId),item=weaponInventory.find(v=>v.id===selected.id);
@@ -11399,6 +11446,7 @@ function updateBattle(){
   if(!emoteKeyHandled){if(justPressed("1"))switchRoleByTeamSlot(0);if(justPressed("2"))switchRoleByTeamSlot(1);if(justPressed("3"))switchRoleByTeamSlot(2);}
   if(justPressed("tab")){const used=battleModeSource==="crystalWar"&&window.PZCrystalWar&&typeof window.PZCrystalWar.toggleBattleEmotes==="function"&&window.PZCrystalWar.toggleBattleEmotes();if(!used)toggleLock();} if(justPressed("f")){ if(!battleExploreInteract() && !projectAreaInteract()) chainAttack(); }
   let dx=0,dy=0; if(keys.w)dy-=1; if(keys.s)dy+=1; if(keys.a)dx-=1; if(keys.d)dx+=1;if(battleModeSource==="commission"&&operationRun?.stun>0){dx=0;dy=0;}
+  updateExecutorIdle(!!(dx||dy||mouseDown||attackBuffer>0||skillBuffer>0||ultBuffer>0||dashBuffer>0||player.attackMotion>0||ravenCombat.mode));
   const role=roles[player.role];
   if(dx||dy){ const l=Math.hypot(dx,dy),operationSpeed=battleModeSource==="commission"&&operationRun?.config?.player==="rapid"?1.18:1; dx/=l; dy/=l; player.vx+=dx*role.speed*MOVE_SPEED_MULT*.35*operationSpeed*frameScale; player.vy+=dy*role.speed*MOVE_SPEED_MULT*.35*operationSpeed*frameScale; if(Math.abs(dx)>.1)player.facing=dx>0?1:-1; }
   if(lockTarget&&lockTarget.alive) player.facing=lockTarget.x>player.x?1:-1; else if(lockTarget&&!lockTarget.alive) lockTarget=null;
@@ -13650,16 +13698,12 @@ function drawLogin(){
       drawDeletionPeriodPrompt();
       return;
     }
-    const pulse=.58 + Math.sin(menuPulse/20)*.28;
-    ctx.globalAlpha=pulse;
-    ctx.fillStyle="#ffe066";
-    ctx.font="bold 26px " + FONT_UI;
-    ctx.fillText(tr("点击开始","Tap To Start"),W/2,H/2+18);
-    ctx.globalAlpha=1;
+    drawBtn(tr("以此账号进入","CONTINUE WITH THIS ACCOUNT"),"",W/2-155,H/2-18,310,62,cloudAuthStateResolved&&performance.now()>=mobileAccountStartReadyAt,"#ffe066");
 
     ctx.fillStyle="rgba(255,255,255,.58)";
     ctx.font="15px " + FONT_UI;
     ctx.fillText(cloudUser.email || cloudTx("cloudLoggedIn"),W/2,H/2+62);
+    drawBtn(tr("切换账号","SWITCH ACCOUNT"),"",W/2-125,H/2+82,250,40,true,"#9aa7bd");
 
     ctx.fillStyle="rgba(255,255,255,.58)";
     ctx.font="15px " + FONT_UI;
@@ -13672,15 +13716,11 @@ function drawLogin(){
   }
 
   if(guestMode && hasCreatedProfile && validPlayerName(playerName)){
-    const pulse=.58 + Math.sin(menuPulse/20)*.28;
-    ctx.globalAlpha=pulse;
-    ctx.fillStyle="#ffe066";
-    ctx.font="bold 26px " + FONT_UI;
-    ctx.fillText(tr("点击开始","Tap To Start"),W/2,H/2+18);
-    ctx.globalAlpha=1;
+    drawBtn(tr("进入游客存档","CONTINUE GUEST SAVE"),"",W/2-155,H/2-18,310,62,performance.now()>=mobileAccountStartReadyAt,"#ffe066");
     ctx.fillStyle="rgba(255,255,255,.66)";
     ctx.font="15px " + FONT_UI;
     ctx.fillText((playerName||"PLAYER")+"  ·  "+tr("游客本地存档","Local Guest Save"),W/2,H/2+62);
+    drawBtn(tr("切换账号","SWITCH ACCOUNT"),"",W/2-125,H/2+82,250,40,true,"#9aa7bd");
     ctx.fillStyle="rgba(255,255,255,.48)";
     ctx.fillText(accountMsg || tr("游客进度已保存在此设备","Guest progress is saved on this device"),W/2,H-70);
     ctx.fillStyle="rgba(255,255,255,.32)";
@@ -19572,6 +19612,16 @@ function drawFloraLimitedFullPortrait(x,y,w,h,alpha=1){
   ctx.drawImage(floraExecutorPortraitImg,sx,sy,sw,sh,x+(w-dw)/2,y+h-dh,dw,dh);ctx.restore();return true;
 }
 
+function recruitModelIdlePose(roleId){
+  const phase=(menuPulse*.012+roleId*.71)%(Math.PI*2),lift=.5+.5*Math.sin(phase),turn=Math.sin(phase*.72);
+  const names=["bladeCheck","bowTune","dualSpin","focusOrb","coatFix","medicalCheck","shieldBrace","katanaSheath"];
+  return{name:names[roleId]||"lookAround",phase:phase/(Math.PI*2),lift,turn,weapon:lift};
+}
+function drawRecruitModelStand(roleId,cx,cy,scale=1){
+  const r=roles[roleId]||roles[0],pulse=.5+.5*Math.sin(menuPulse*.045+roleId);
+  ctx.save();ctx.translate(cx,cy);ctx.fillStyle="rgba(3,8,15,.72)";ctx.beginPath();ctx.ellipse(0,27,43*scale,12*scale,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle=r.color;ctx.globalAlpha=.45+.3*pulse;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,27,39*scale,9*scale,0,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;ctx.scale(scale,scale);ctx.shadowColor=r.color;ctx.shadowBlur=13;drawPortraitBasedBattleModel(roleId,25,1,false,0,recruitModelIdlePose(roleId));ctx.shadowBlur=0;ctx.restore();
+}
+
 function drawLimitedRecruitShowcase(){
   const vx=55,vy=235,vw=1010,vh=310,scroll=shopLimitedScrollY,pulse=.5+.5*Math.sin(menuPulse*.045),ownedNow=!!owned[3];
   ctx.save();ctx.beginPath();ctx.rect(vx,vy,vw,vh);ctx.clip();ctx.translate(0,-scroll);
@@ -19585,6 +19635,7 @@ function drawLimitedRecruitShowcase(){
   ctx.fillStyle="#fff";ctx.font="bold 46px "+FONT_UI;ctx.fillText(tx("floraDisplayFull"),86,y+102);
   ctx.fillStyle="#bfe8ff";ctx.font="bold 16px "+FONT_UI;ctx.fillText(mt("floraShopRank"),88,y+137);
   ctx.fillStyle="rgba(255,255,255,.76)";ctx.font="14px "+FONT_UI;drawUIText(mt("floraShopFeature"),88,y+174,350,{size:14,maxLines:3,lineH:24});
+  drawRecruitModelStand(3,260,y+226,1.22);
   ctx.fillStyle="rgba(4,10,18,.72)";ctx.fillRect(78,y+272,390,70);ctx.strokeStyle="rgba(136,216,255,.35)";ctx.strokeRect(78,y+272,390,70);ctx.fillStyle="#ffe066";ctx.font="bold 12px "+FONT_UI;ctx.fillText(language==="en"?"FIXED PRICE · NO ODDS · NO GACHA":"固定价格 · 无概率 · 非抽卡",96,y+300);ctx.fillStyle="rgba(255,255,255,.58)";ctx.font="11px "+FONT_UI;ctx.fillText(language==="en"?"Purchase once to permanently recruit Flora":"购买一次即可永久获得芙洛拉",96,y+325);
   ctx.strokeStyle=`rgba(136,216,255,${.55+pulse*.3})`;ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);
   const dy=645;ctx.fillStyle="rgba(8,14,27,.98)";ctx.fillRect(x,dy,w,205);ctx.strokeStyle="rgba(136,216,255,.35)";ctx.strokeRect(x,dy,w,205);ctx.fillStyle="#88d8ff";ctx.fillRect(x,dy,7,205);
@@ -19651,8 +19702,11 @@ function drawShopWeaponArmory(){
   drawInsetLabel(ownedItem?(language==="en"?"OWNED":"已拥有"):(language==="en"?"LOCKED":"未获得"),x+w-122,y+22,92,30,ownedItem?"#7cc7ff":"#888","rgba(255,255,255,.05)","rgba(255,255,255,.16)",11,true,"center");
   if(selected.price>0&&!ownedItem) drawBtn(language==="en"?"Purchase":"购买","◆ "+selected.price,840,292,180,42,true,"#ffe066");
 
+  shopWeaponScrollX=clamp(shopWeaponScrollX,0,permanentWeaponMaxScroll());
+  ctx.save();ctx.beginPath();ctx.rect(x,366,w,94);ctx.clip();
   for(let n=0;n<catalog.length;n++){
-    const wd=catalog[n],col=n%4,row=Math.floor(n/4),cx=x+col*245,cy=366+row*68,cw=230,ch=58,active=wd.id===shopWeaponSelectedId;
+    const wd=catalog[n],cx=x+n*245-shopWeaponScrollX,cy=382,cw=230,ch=58,active=wd.id===shopWeaponSelectedId;
+    if(cx+cw<x||cx>x+w)continue;
     const owned=(weaponInventory||[]).some(v=>v.id===wd.id&&v.owned);
     ctx.fillStyle=active?"rgba(124,199,255,.14)":"rgba(255,255,255,.055)";ctx.fillRect(cx,cy,cw,ch);
     ctx.strokeStyle=active?"#7cc7ff":"rgba(255,255,255,.13)";ctx.lineWidth=active?2:1;ctx.strokeRect(cx,cy,cw,ch);
@@ -19662,6 +19716,8 @@ function drawShopWeaponArmory(){
     ctx.fillStyle="rgba(255,255,255,.50)";ctx.font="9px "+FONT_UI;ctx.fillText(weaponTypeLabel(wd.type)+" · ATK "+wd.baseAtk,cx+73,cy+39);
     ctx.textAlign="right";ctx.fillStyle=owned?"#7cc7ff":"#777";ctx.fillText(owned?(language==="en"?"OWNED":"已拥有"):(language==="en"?"LOCK":"未获得"),cx+cw-10,cy+50);
   }
+  ctx.restore();
+  const maxScroll=permanentWeaponMaxScroll();if(maxScroll>0){const knob=Math.max(130,w*(w/(catalog.length*245-15))),kx=x+(w-knob)*(shopWeaponScrollX/maxScroll);ctx.fillStyle="rgba(255,255,255,.10)";ctx.fillRect(x,470,w,4);ctx.fillStyle="#7cc7ff";ctx.fillRect(kx,470,knob,4);ctx.fillStyle="rgba(255,255,255,.55)";ctx.font="10px "+FONT_UI;ctx.textAlign="center";ctx.fillText(language==="en"?"Swipe left / right to browse the permanent armory":"左右滑动查看常驻武器库",x+w/2,492);}
 }
 
 function drawShopPackArt(pack,x,y,w,h){
@@ -19701,6 +19757,7 @@ function drawPermanentRecruitCard(it,x,y,w=430,h=290){
   ctx.fillStyle="rgba(255,255,255,.66)";ctx.font="11px "+FONT_UI;ctx.fillText(fitTextToWidth(r.line,182,11,false),x+224,y+143);
   ctx.fillStyle="rgba(255,255,255,.38)";ctx.font="9px "+FONT_UI;ctx.fillText(language==="en"?"Fixed price · permanent unlock":"明码直购 · 永久获得",x+224,y+170);
   ctx.fillStyle=ownedNow?"#7cc7ff":"#ffe066";ctx.font="bold 17px Arial";ctx.fillText(ownedNow?(language==="en"?"RECRUITED":"已获得"):("◆ "+it.price),x+224,y+206);
+  drawRecruitModelStand(i,x+360,y+181,.88);
   drawBtn(ownedNow?(language==="en"?"Owned":"已拥有"):(language==="en"?"Recruit":"确认招募"),ownedNow?"✓":("◆ "+it.price),x+224,y+226,182,42,!ownedNow,ownedNow?"#7cc7ff":"#ffe066");
 }
 
@@ -19976,15 +20033,19 @@ function drawEnemy(e){ if(!e.alive)return; ctx.save(); ctx.translate(e.x,e.y); i
   ctx.textAlign="center";
   const enemyLabel=e.type==="fireCrystal"?(language==="en"?"FIRE CRYSTAL":"火焰晶体"):e.type.toUpperCase();
   ctx.fillText(e.boss?"BOSS":enemyLabel,0,e.r+18); if(lockTarget===e){ctx.strokeStyle="#ffe066";ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,e.r+10,0,Math.PI*2);ctx.stroke();} ctx.restore(); }
-function drawPortraitBasedBattleModel(roleId,radius,direction,moving,weaponSwing){
+function drawPortraitBasedBattleModel(roleId,radius,direction,moving,weaponSwing,idlePose={name:"",phase:0,lift:0,turn:0,weapon:0}){
   const presets={
     0:{skin:"#efd3c5",hair:"#6d4731",outer:"#17191f",outerShade:"#090b10",inner:"#b59660",innerShade:"#785c38",accent:"#8f2724",trim:"#d8dbe2",boot:"#5b2b24",weapon:"#e9edf3",edge:"#ffbe5c"},
     1:{skin:"#efd5c6",hair:"#26c7b5",outer:"#278f7c",outerShade:"#145449",inner:"#788f8b",innerShade:"#354a48",accent:"#b18562",trim:"#dce8e5",boot:"#172f2e",weapon:"#d9a735",edge:"#74ffb7"},
+    2:{skin:"#e8c9bd",hair:"#342f45",outer:"#302744",outerShade:"#15121f",inner:"#5f526d",innerShade:"#282331",accent:"#b47cff",trim:"#b8a6d8",boot:"#17131e",weapon:"#d8c7ff",edge:"#b47cff"},
     3:{skin:"#efd8cf",hair:"#5554a4",outer:"#f2f4f8",outerShade:"#b9c4d5",inner:"#f8fafc",innerShade:"#25364a",accent:"#1d2f45",trim:"#ffffff",boot:"#6d4028",weapon:"#88d8ff",edge:"#d9f4ff"},
-    4:{skin:"#e7d2c8",hair:"#111318",outer:"#17191d",outerShade:"#07080b",inner:"#eef1f4",innerShade:"#6d727b",accent:"#2a2e35",trim:"#ffffff",boot:"#111318",weapon:"#dfe6ef",edge:"#939aa5"}
+    4:{skin:"#e7d2c8",hair:"#111318",outer:"#17191d",outerShade:"#07080b",inner:"#eef1f4",innerShade:"#6d727b",accent:"#2a2e35",trim:"#ffffff",boot:"#111318",weapon:"#dfe6ef",edge:"#939aa5"},
+    5:{skin:"#eed1c6",hair:"#d9e2ec",outer:"#29384a",outerShade:"#111a25",inner:"#d8e4ed",innerShade:"#637487",accent:"#78f0c3",trim:"#eaf7ff",boot:"#172330",weapon:"#bdebdc",edge:"#78f0c3"},
+    6:{skin:"#eacdbf",hair:"#d8b16a",outer:"#315a78",outerShade:"#152b3d",inner:"#8fb8cd",innerShade:"#36576b",accent:"#5db8ff",trim:"#d9f2ff",boot:"#1b3040",weapon:"#dcebf4",edge:"#5db8ff"},
+    7:{skin:"#ead0c5",hair:"#161b23",outer:"#243741",outerShade:"#0d171d",inner:"#6b8791",innerShade:"#2a414a",accent:"#65e6ff",trim:"#d9fbff",boot:"#111c22",weapon:"#e7fbff",edge:"#65e6ff"}
   };
   const p=presets[roleId];if(!p)return false;
-  const s=radius/20,dir=direction<0?-1:1,baseAlpha=ctx.globalAlpha;ctx.save();ctx.scale(s,s);
+  const s=radius/20,dir=direction<0?-1:1,baseAlpha=ctx.globalAlpha;ctx.save();ctx.scale(s,s);if(idlePose.name){ctx.translate(idlePose.turn*1.2,-idlePose.lift*.8);ctx.rotate(idlePose.turn*.025);}
   ctx.fillStyle=p.outerShade;ctx.beginPath();ctx.moveTo(-18,-4);ctx.quadraticCurveTo(-25,10,-19,22);ctx.lineTo(-4,18);ctx.lineTo(0,4);ctx.closePath();ctx.fill();
   ctx.fillStyle=p.outer;ctx.beginPath();ctx.moveTo(-17,-7);ctx.quadraticCurveTo(-23,6,-17,19);ctx.lineTo(-3,15);ctx.lineTo(0,1);ctx.closePath();ctx.fill();
   ctx.fillStyle=p.outer;ctx.beginPath();ctx.moveTo(3,-8);ctx.quadraticCurveTo(18,-5,21,13);ctx.lineTo(12,20);ctx.lineTo(2,13);ctx.closePath();ctx.fill();
@@ -20000,15 +20061,27 @@ function drawPortraitBasedBattleModel(roleId,radius,direction,moving,weaponSwing
   if(roleId===1){ctx.fillStyle="#394746";ctx.fillRect(-9,-28,18,5);ctx.fillStyle=p.accent;for(let i=-2;i<=2;i++){ctx.beginPath();ctx.arc(i*3,-7,2.1,0,Math.PI*2);ctx.fill();}}
   if(roleId===3){ctx.fillStyle="#f7f8fb";ctx.beginPath();ctx.moveTo(-8,-26);ctx.lineTo(-3,-32);ctx.lineTo(0,-25);ctx.lineTo(4,-32);ctx.lineTo(9,-25);ctx.closePath();ctx.fill();ctx.fillStyle="#202a3a";ctx.fillRect(-9,5,18,3);}
   if(roleId===4){ctx.fillStyle="#fff";ctx.beginPath();ctx.moveTo(-5,-9);ctx.lineTo(0,-3);ctx.lineTo(5,-9);ctx.closePath();ctx.fill();ctx.fillStyle="#111318";ctx.fillRect(-2,-8,4,9);}
+  if(roleId===2){ctx.fillStyle="#191522";ctx.beginPath();ctx.moveTo(-11,-22);ctx.quadraticCurveTo(0,-34,11,-22);ctx.lineTo(8,-12);ctx.lineTo(-8,-12);ctx.closePath();ctx.fill();ctx.strokeStyle="#b47cff";ctx.stroke();}
+  if(roleId===5){ctx.fillStyle="#eaf7ff";ctx.fillRect(-11,-10,22,4);ctx.fillStyle="#78f0c3";ctx.beginPath();ctx.arc(10,-5,3,0,Math.PI*2);ctx.fill();}
+  if(roleId===6){ctx.fillStyle="#8ecdf1";ctx.beginPath();ctx.moveTo(-18,-8);ctx.lineTo(-9,-14);ctx.lineTo(-5,-3);ctx.lineTo(-17,3);ctx.closePath();ctx.fill();ctx.fillStyle="#d9f2ff";ctx.fillRect(11,-8,7,18);}
+  if(roleId===7){ctx.strokeStyle="#65e6ff";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-8,-28);ctx.lineTo(-13,-34);ctx.moveTo(8,-28);ctx.lineTo(13,-34);ctx.stroke();ctx.fillStyle="#49636c";ctx.fillRect(-10,-28,20,4);}
   if(roleId===0){ctx.fillStyle="#5f2020";ctx.beginPath();ctx.moveTo(-19,-8);ctx.lineTo(-10,-13);ctx.lineTo(-7,-5);ctx.lineTo(-16,1);ctx.closePath();ctx.fill();ctx.strokeStyle="#d29a54";ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle="#2b3038";ctx.fillRect(9,-4,8,13);}
   if(roleId===1){ctx.fillStyle=p.outer;ctx.beginPath();ctx.moveTo(-15,-5);ctx.quadraticCurveTo(-29,2,-25,14);ctx.lineTo(-15,18);ctx.lineTo(-8,1);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(13,-5);ctx.quadraticCurveTo(29,2,26,15);ctx.lineTo(16,18);ctx.lineTo(8,1);ctx.closePath();ctx.fill();ctx.strokeStyle="#74ffb7";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-22,9);ctx.lineTo(-16,14);ctx.moveTo(22,9);ctx.lineTo(16,14);ctx.stroke();}
   if(roleId===3){ctx.fillStyle="rgba(242,244,248,.94)";ctx.beginPath();ctx.moveTo(-13,-9);ctx.quadraticCurveTo(-27,5,-21,23);ctx.lineTo(-8,17);ctx.lineTo(0,2);ctx.lineTo(9,17);ctx.lineTo(21,22);ctx.quadraticCurveTo(27,4,13,-9);ctx.closePath();ctx.fill();ctx.strokeStyle="#9acdec";ctx.lineWidth=1.2;ctx.stroke();ctx.fillStyle="#6e65bb";ctx.beginPath();ctx.arc(0,4,5,0,Math.PI*2);ctx.fill();}
   if(roleId===4){ctx.fillStyle="#0b0d11";ctx.beginPath();ctx.moveTo(-13,7);ctx.lineTo(-17,29);ctx.lineTo(-3,23);ctx.lineTo(0,10);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(3,8);ctx.lineTo(17,29);ctx.lineTo(15,11);ctx.lineTo(8,3);ctx.closePath();ctx.fill();ctx.strokeStyle="#747a84";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-11,9);ctx.lineTo(-14,25);ctx.moveTo(7,8);ctx.lineTo(14,25);ctx.stroke();}
+  if(roleId===2){ctx.fillStyle="#211a30";ctx.beginPath();ctx.moveTo(-18,-5);ctx.lineTo(-24,18);ctx.lineTo(-8,23);ctx.lineTo(-2,5);ctx.closePath();ctx.fill();ctx.fillStyle="#b47cff";ctx.fillRect(-20,2,3,14);}
+  if(roleId===5){ctx.fillStyle="#213648";ctx.beginPath();ctx.moveTo(-16,-6);ctx.lineTo(-20,19);ctx.lineTo(-7,23);ctx.lineTo(-2,5);ctx.closePath();ctx.fill();ctx.strokeStyle="#78f0c3";ctx.stroke();ctx.fillStyle="#eef8ff";ctx.fillRect(7,-2,8,15);}
+  if(roleId===6){ctx.fillStyle="#234c68";ctx.beginPath();ctx.moveTo(-20,-4);ctx.lineTo(-25,16);ctx.lineTo(-13,23);ctx.lineTo(-5,4);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(13,-7);ctx.lineTo(24,5);ctx.lineTo(22,20);ctx.lineTo(8,11);ctx.closePath();ctx.fill();}
+  if(roleId===7){ctx.fillStyle="#13252d";ctx.beginPath();ctx.moveTo(-15,4);ctx.lineTo(-19,27);ctx.lineTo(-3,20);ctx.lineTo(0,8);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(4,7);ctx.lineTo(18,26);ctx.lineTo(15,8);ctx.closePath();ctx.fill();ctx.strokeStyle="#65e6ff";ctx.stroke();}
   ctx.strokeStyle=p.edge;ctx.globalAlpha=baseAlpha*.72;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-16,-5);ctx.lineTo(-17,16);ctx.moveTo(11,-5);ctx.lineTo(14,17);ctx.stroke();ctx.strokeStyle="rgba(255,255,255,.38)";ctx.globalAlpha=baseAlpha;ctx.beginPath();ctx.moveTo(-7,-6);ctx.lineTo(-7,8);ctx.moveTo(6,-5);ctx.lineTo(7,7);ctx.stroke();
-  ctx.save();ctx.rotate(dir*weaponSwing);
+  ctx.save();ctx.rotate(dir*(weaponSwing+(idlePose.name&&idlePose.name!=="lookAround"?idlePose.weapon*.32:0)));
   if(roleId===1){ctx.strokeStyle="#74572e";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(dir*7,4);ctx.lineTo(dir*30,-9);ctx.stroke();ctx.fillStyle="#d9a735";ctx.beginPath();ctx.arc(dir*33,-11,6,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#74ffb7";ctx.lineWidth=2;ctx.beginPath();ctx.arc(dir*33,-11,10,0,Math.PI*2);ctx.stroke();}
   else if(roleId===3){ctx.strokeStyle="#d9e7f2";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(dir*7,5);ctx.lineTo(dir*30,-13);ctx.stroke();ctx.fillStyle="#705fc7";ctx.beginPath();ctx.moveTo(dir*28,-18);ctx.lineTo(dir*39,-13);ctx.lineTo(dir*29,-7);ctx.closePath();ctx.fill();ctx.shadowColor="#88d8ff";ctx.shadowBlur=10;ctx.strokeStyle="#d9f4ff";ctx.stroke();ctx.shadowBlur=0;}
   else if(roleId===4){ctx.strokeStyle="#151820";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(dir*7,2);ctx.lineTo(dir*14,0);ctx.moveTo(-dir*5,5);ctx.lineTo(-dir*14,10);ctx.stroke();ctx.strokeStyle="#dfe6ef";ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(dir*13,0);ctx.lineTo(dir*32,-5);ctx.moveTo(-dir*13,10);ctx.lineTo(-dir*25,17);ctx.stroke();}
+  else if(roleId===2){ctx.strokeStyle="#d8c7ff";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(dir*8,1);ctx.lineTo(dir*34,-13);ctx.moveTo(-dir*7,4);ctx.lineTo(-dir*29,16);ctx.stroke();ctx.fillStyle="#b47cff";ctx.beginPath();ctx.arc(dir*35,-14,3,0,Math.PI*2);ctx.fill();}
+  else if(roleId===5){ctx.strokeStyle="#bdebdc";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(dir*6,5);ctx.lineTo(dir*32,-7);ctx.stroke();ctx.fillStyle="#78f0c3";ctx.beginPath();ctx.arc(dir*34,-8,6,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.fillRect(dir>0?30:-38,-10,8,4);}
+  else if(roleId===6){ctx.fillStyle="#315a78";ctx.beginPath();ctx.arc(dir*22,1,15,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#d9f2ff";ctx.lineWidth=3;ctx.stroke();ctx.fillStyle="#5db8ff";ctx.fillRect(dir>0?18:-25,-12,7,24);}
+  else if(roleId===7){ctx.strokeStyle="#18262d";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(dir*7,3);ctx.lineTo(dir*17,1);ctx.stroke();ctx.strokeStyle="#e7fbff";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(dir*15,0);ctx.lineTo(dir*43,-5);ctx.stroke();ctx.strokeStyle="#65e6ff";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(dir*19,-2);ctx.lineTo(dir*43,-7);ctx.stroke();}
   else{ctx.strokeStyle="#151820";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(dir*8,2);ctx.lineTo(dir*17,1);ctx.stroke();ctx.strokeStyle=p.weapon;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(dir*15,0);ctx.lineTo(dir*37,-3);ctx.stroke();ctx.strokeStyle=p.edge;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(dir*18,-2);ctx.lineTo(dir*36,-5);ctx.stroke();}
   ctx.restore();
   ctx.restore();return true;
@@ -20017,14 +20090,15 @@ function drawPlayer(){
   const r=roles[player.role];
   const moving=Math.hypot(player.vx||0,player.vy||0)>.12;
   const animTime=performance.now()/1000;
-  const bob=moving?Math.sin(animTime*12)*2.4:Math.sin(animTime*3.2)*.8;
+  const idlePose=executorIdlePose();
+  const bob=moving?Math.sin(animTime*12)*2.4:Math.sin(animTime*3.2)*.8-idlePose.lift*1.2;
   const lean=clamp((player.vx||0)*.035,-.12,.12);
   const weaponSwing=player.attackCd>0?Math.sin(clamp(player.attackCd/18,0,1)*Math.PI)*.65:0;
   const motionMax=Math.max(1,player.attackMotionMax||1),motion=clamp((player.attackMotion||0)/motionMax,0,1);
   const strikeCurve=Math.sin((1-motion)*Math.PI),lunge=player.facing*strikeCurve*((player.attackMotionStep||1)===3?16:10);
   ctx.save();
   ctx.translate(player.x+lunge,player.y+bob-strikeCurve*2);
-  ctx.rotate(lean+player.facing*strikeCurve*.055);
+  ctx.rotate(lean+player.facing*strikeCurve*.055+idlePose.turn*.018);
   ctx.scale(1+strikeCurve*.08,1-strikeCurve*.055);
 
   if(playerStatuses.burn){ctx.strokeStyle="#ff785f";ctx.lineWidth=3;ctx.setLineDash([8,5]);ctx.beginPath();ctx.arc(0,0,player.r+14,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
@@ -20050,7 +20124,7 @@ function drawPlayer(){
   ctx.ellipse(0,player.r+13,player.r*1.1,player.r*.25,0,0,Math.PI*2);
   ctx.fill();
 
-  const portraitModel=drawPortraitBasedBattleModel(player.role,player.r,player.facing,moving,weaponSwing);
+  const portraitModel=drawPortraitBasedBattleModel(player.role,player.r,player.facing,moving,weaponSwing,idlePose);
   ctx.shadowBlur=0;
   if(!portraitModel){ctx.fillStyle=r.color;ctx.beginPath();ctx.ellipse(0,0,player.r*(moving?1.06:1),player.r*(moving?.94:1),0,0,Math.PI*2);ctx.fill();ctx.save();ctx.rotate(player.facing*weaponSwing);ctx.fillStyle=r.sub;ctx.beginPath();ctx.moveTo(player.facing*33,0);ctx.lineTo(player.facing*10,-11);ctx.lineTo(player.facing*10,11);ctx.closePath();ctx.fill();ctx.restore();ctx.fillStyle="rgba(255,255,255,.36)";ctx.fillRect(-9,-player.r+4,18,5);if(moving){ctx.fillStyle=r.sub;ctx.fillRect(-12,player.r-2,8,8);ctx.fillRect(4,player.r-2,8,8);}}
 
