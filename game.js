@@ -2578,13 +2578,34 @@ let pendingGuestSupportTier = -1;
 let accountCredentialPanelActive = false;
 
 function cloudUserFromApi(user){
-  if(!user)return null;
-  const accountType=String(user.accountType||user.account_type||"sf");
-  return {uid:String(user.id||user.uid||""),email:String(user.email||""),displayName:String(user.username||user.displayName||""),accountType,isGuest:accountType==="guest"||user.isGuest===true};
+  if(!user || typeof user !== "object") return null;
+
+  const uid = String(user.id || user.uid || "").trim();
+  const displayName = String(user.username || user.displayName || "").trim();
+  const email = String(user.email || "").trim();
+  const accountType = String(user.accountType || user.account_type || "sf");
+  const isGuest = accountType === "guest" || user.isGuest === true;
+
+  // 没有 UID 的身份绝对不能进入游戏账号状态
+  if(!uid){
+    console.warn("[Account] Rejected identity without UID", user);
+    return null;
+  }
+
+  // 正常 SF Account 至少应存在可识别的账号资料
+  if(!isGuest && !displayName && !email){
+    console.warn("[Account] Rejected incomplete SF Account identity", user);
+    return null;
+  }
+
+  return {
+    uid,
+    email,
+    displayName,
+    accountType,
+    isGuest
+  };
 }
-
-
-
 
 function legacyCloudSetMsg(text, frames=180){
   cloudMsg = text || "";
