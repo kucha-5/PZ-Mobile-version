@@ -3496,42 +3496,95 @@ async function signOutAndClearLocal(skipCloudSave=false){
   gameMode = "login";
   setAccountMsg(language==="en" ? "Signed out" : "已退出登录",100);
 }
-
 async function bootAccountSession(){
   if(!initCloudSave()) return;
   if(cloudBootListenerAttached) return;
+
   cloudBootListenerAttached = true;
+
   Promise.resolve(cloudPersistenceReady).then(async restored=>{
     cloudAuthStateResolved = true;
-    if(!restored){ cloudUser=null; accountAuthed=false; return; }
-    cloudUser=cloudUserFromApi(restored);
-    const trustedUid=trustedMobileAccountUid();
-    if(!cloudUser?.uid||trustedUid!==cloudUser.uid){
-      console.warn("[MobileAccount] discarded untrusted cached session",cloudUser?.uid||"");
-      try{window.PZAccount?.clear?.();}catch(_){}
-      cloudUser=null;accountAuthed=false;guestMode=false;explicitGuestSession=false;setStoredGuestSessionActive(false);
-      resetRuntimeDefaults();reloadAccountScopedGameplay(false);gameMode="login";
-      setAccountMsg(language==="en"?"A cached account from another session was removed. Please sign in.":"已移除未经本设备确认的缓存账号，请重新登录。",180);
+
+    if(!restored){
+      cloudUser = null;
+      accountAuthed = false;
       return;
     }
-    accountAuthed=true;
-    if(cloudUser&&cloudUser.isGuest){
-      guestMode=storedGuestSessionActive();
-      explicitGuestSession=guestMode;
-      if(guestMode)reloadAccountScopedGameplay(false);
+
+    cloudUser = cloudUserFromApi(restored);
+
+    const trustedUid = trustedMobileAccountUid();
+
+    if(!cloudUser?.uid || trustedUid !== cloudUser.uid){
+      console.warn(
+        "[MobileAccount] discarded untrusted cached session",
+        cloudUser?.uid || ""
+      );
+
+      try{
+        window.PZAccount?.clear?.();
+      }catch(_){}
+
+      cloudUser = null;
+      accountAuthed = false;
+      guestMode = false;
+      explicitGuestSession = false;
+      setStoredGuestSessionActive(false);
+
+      resetRuntimeDefaults();
+      reloadAccountScopedGameplay(false);
+      gameMode = "login";
+
+      setAccountMsg(
+        language === "en"
+          ? "A cached account from another session was removed. Please sign in."
+          : "已移除未经本设备确认的缓存账号，请重新登录。",
+        180
+      );
+
       return;
     }
-    if(explicitGuestSession){ cloudUser=null; accountAuthed=false; return; }
+
+    accountAuthed = true;
+
+    if(cloudUser && cloudUser.isGuest){
+      guestMode = storedGuestSessionActive();
+      explicitGuestSession = guestMode;
+
+      if(guestMode){
+        reloadAccountScopedGameplay(false);
+      }
+
+      return;
+    }
+
+    if(explicitGuestSession){
+      cloudUser = null;
+      accountAuthed = false;
+      return;
+    }
+
     restoreCachedAccountLanguage(cloudUser.uid);
     reloadAccountScopedGameplay(false);
-    const meta=await readAccountMeta();
-    if(hasPendingDeletion(meta)) showPendingDeletionLanding(meta);
-    else if(gameMode==="login") setAccountMsg(language==="en" ? "Signed in. Tap to Start to load this account." : "已登录，点击开始载入该账号存档。",90);
-  }).catch(err=>console.warn("[SF Account boot]",err));
+
+    const meta = await readAccountMeta();
+
+    if(hasPendingDeletion(meta)){
+      showPendingDeletionLanding(meta);
+    }else if(gameMode === "login"){
+      setAccountMsg(
+        language === "en"
+          ? "Signed in. Tap to Start to load this account."
+          : "已登录，点击开始载入该账号存档。",
+        90
+      );
+    }
+  }).catch(err=>{
+    console.warn("[SF Account boot]", err);
+  });
 }
 
-function resetRuntimeDefaults(){
-  prologueDone = false;
+function resetRuntimeDefaults(){  prologueDone = false;
   lobbyGuideDone = false;
   lobbyGuideStep = 0;
   tutorialCompleted = false;
@@ -11461,7 +11514,7 @@ function updateBattle(){
   if(!emoteKeyHandled){if(justPressed("1"))switchRoleByTeamSlot(0);if(justPressed("2"))switchRoleByTeamSlot(1);if(justPressed("3"))switchRoleByTeamSlot(2);}
   if(justPressed("tab")){const used=battleModeSource==="crystalWar"&&window.PZCrystalWar&&typeof window.PZCrystalWar.toggleBattleEmotes==="function"&&window.PZCrystalWar.toggleBattleEmotes();if(!used)toggleLock();} if(justPressed("f")){ if(!battleExploreInteract() && !projectAreaInteract()) chainAttack(); }
   let dx=0,dy=0; if(keys.w)dy-=1; if(keys.s)dy+=1; if(keys.a)dx-=1; if(keys.d)dx+=1;if(battleModeSource==="commission"&&operationRun?.stun>0){dx=0;dy=0;}
-  updateExecutorIdle(!!(dx||dy||mouseDown||attackBuffer>0||skillBuffer>0||ultBuffer>0||dashBuffer>0||player.attackMotion>0||ravenCombat.mode));
+  updateExecutorIdle(!!(dx||dy||mouseDown||attackBuffer>0||skillBuffer>0||ultBuffer>0||dashBuffer>0||player.attackMotion>0));
   const role=roles[player.role];
   if(dx||dy){ const l=Math.hypot(dx,dy),operationSpeed=battleModeSource==="commission"&&operationRun?.config?.player==="rapid"?1.18:1; dx/=l; dy/=l; player.vx+=dx*role.speed*MOVE_SPEED_MULT*.35*operationSpeed*frameScale; player.vy+=dy*role.speed*MOVE_SPEED_MULT*.35*operationSpeed*frameScale; if(Math.abs(dx)>.1)player.facing=dx>0?1:-1; }
   if(lockTarget&&lockTarget.alive) player.facing=lockTarget.x>player.x?1:-1; else if(lockTarget&&!lockTarget.alive) lockTarget=null;
@@ -13731,19 +13784,32 @@ function drawLogin(){
   }
 
   if(guestMode && hasCreatedProfile && validPlayerName(playerName)){
-    drawBtn(tr("进入游客存档","CONTINUE GUEST SAVE"),"",W/2-155,H/2-18,310,62,performance.now()>=mobileAccountStartReadyAt,"#ffe066");
-    ctx.fillStyle="rgba(255,255,255,.66)";
-    ctx.font="15px " + FONT_UI;
-    ctx.fillText((playerName||"PLAYER")+"  ·  "+tr("游客本地存档","Local Guest Save"),W/2,H/2+62);
-    drawBtn(tr("切换账号","SWITCH ACCOUNT"),"",W/2-125,H/2+82,250,40,true,"#9aa7bd");
-    ctx.fillStyle="rgba(255,255,255,.48)";
-    ctx.fillText(accountMsg || tr("游客进度已保存在此设备","Guest progress is saved on this device"),W/2,H-70);
-    ctx.fillStyle="rgba(255,255,255,.32)";
-    ctx.font="12px " + FONT_UI;
-    ctx.fillText(tr("本地游客 / 点击开始进入游戏","Local guest / Tap to start"),W/2,H-38);
-    drawLoginSettingsIcon();
-    return;
+  const canStart = performance.now() >= mobileAccountStartReadyAt;
+
+  if(
+    (clicked && inRect(W/2-155,H/2-18,310,62) && canStart) ||
+    ((justPressed("enter") || justPressed(" ")) && canStart)
+  ){
+    clicked = false;
+
+    // 本地 Guest 存档存在，但在线 Guest 身份不存在：
+    // 必须先建立/恢复在线身份，不能直接进入大厅。
+    if(!cloudUser){
+      accountGuestFlow();
+      return;
+    }
+
+    setStoredGuestSessionActive(true);
+    explicitGuestSession = true;
+    startLoading(startTargetAfterAuth());
+  }else if(clicked && inRect(W/2-125,H/2+82,250,40)){
+    clicked = false;
+    exitLocalGuestSession();
   }
+
+  clicked = false;
+  return;
+}
 
   const panelX=W/2-210, panelY=165, panelW=420, panelH=360;
   ctx.fillStyle="rgba(0,0,0,.36)";
