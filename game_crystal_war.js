@@ -1019,7 +1019,22 @@ function clickMobileMultiSelect17(){if(!g.PZ_MOBILE_EDITION||S.page!=="baseBuild
 function click17(){if(S.page==="memoryEditV17")return clickMemoryEditor18();if(S.page==="myMemoriesV17")return clickMyMemories17();if(clickMobileMultiSelect17())return true;if(S.page==="sharedBlueprintsV16"){if(g.inRect(600,30,170,40)){S.page="myMemoriesV17";return true;}if(g.inRect(890,30,130,40)){openMemorySearch17();return true;}}return click16();}
 const wheelBase17=wheel8;function wheel17(delta,x,y){if(S.page==="myMemoriesV17"){memoryListScroll17=Math.max(0,Math.min(Math.max(0,memories16().length-6),memoryListScroll17+Math.sign(delta)));return true;}return wheelBase17(delta,x,y);}
 const escapeBase17=escape8;function escape17(){if(S.page==="memoryEditV17"){const page=memorySearch17?"sharedBlueprintsV16":"baseBuild";memoryEditor17=null;memorySearch17=false;closeMemoryInput17();S.page=page;return true;}if(S.page==="myMemoriesV17"){S.page="sharedBlueprintsV16";return true;}if(S.page==="sharedBlueprintsV16"){S.page="blueprints";return true;}return escapeBase17();}
-g.PZCrystalWar.update=update17;g.PZCrystalWar.draw=draw17;g.PZCrystalWar.handleClick=click17;g.PZCrystalWar.handleEscape=escape17;g.PZCrystalWar.handleWheel=wheel17;g.PZCrystalWar.pointerDown=pointerDown17;g.PZCrystalWar.pointerMove=pointerMove17;g.PZCrystalWar.pointerUp=pointerUp17;
+function placementActive20(){return S.page==="baseBuild"&&!!(S.buildMode||S.blueprintPlacement||customPlacement16);}
+function cancelPlacement20(){S.buildMode=null;S.blueprintPlacement=null;customPlacement16=null;S.linkMode=false;S.wireMode=false;drag.active=false;save();note(T("已取消放置","Placement cancelled"));}
+function draw20(){
+ draw17();if(!placementActive20())return;
+ const c=g.ctx,right=VIEW7.x+VIEW7.w,bottom=VIEW7.y+VIEW7.h;c.save();c.fillStyle="rgba(2,6,13,.985)";
+ c.fillRect(0,0,1120,VIEW7.y);c.fillRect(0,VIEW7.y,VIEW7.x,VIEW7.h);c.fillRect(right,VIEW7.y,1120-right,VIEW7.h);c.fillRect(0,bottom,1120,660-bottom);c.restore();
+ btn(T("取消放置","CANCEL"),920,28,168,52,true,"#ff8b96");
+}
+function click20(){
+ if(!placementActive20())return click17();
+ if(g.inRect(920,28,168,52)){cancelPlacement20();return true;}
+ if(g.inRect(VIEW7.x,VIEW7.y,VIEW7.w,VIEW7.h))return click17();
+ return true;
+}
+function escape20(){if(placementActive20()){cancelPlacement20();return true;}return escape17();}
+g.PZCrystalWar.update=update17;g.PZCrystalWar.draw=draw20;g.PZCrystalWar.handleClick=click20;g.PZCrystalWar.handleEscape=escape20;g.PZCrystalWar.handleWheel=wheel17;g.PZCrystalWar.pointerDown=pointerDown17;g.PZCrystalWar.pointerMove=pointerMove17;g.PZCrystalWar.pointerUp=pointerUp17;
 g.PZCrystalWar.exportPersistentState=()=>JSON.parse(JSON.stringify(S));
 g.PZCrystalWar.importPersistentState=(value,write=true)=>{if(!value||typeof value!=="object")return false;S=normalize(value);ensureIndustryV5();ensureStrategyV6();if(typeof ensureIndustryV7==="function")ensureIndustryV7();if(typeof ensureV8==="function")ensureV8();if(write)save();return true;};
 if(g.PZ_PENDING_CRYSTAL_WAR_STATE){g.PZCrystalWar.importPersistentState(g.PZ_PENDING_CRYSTAL_WAR_STATE,false);g.PZ_PENDING_CRYSTAL_WAR_STATE=null;}

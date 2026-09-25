@@ -1543,7 +1543,7 @@ function handleMobileTouchStart(e){
           if(pointInRect(p,buttons[name])){hit=name;break;}
         }
         if(hit){
-          if(hit==="attack"&&!buttons.attack.interact&&!buttons.attack.parry){mouseX=player.x+player.facing*320;mouseY=player.y;if(player.role===5)mobileInput.chloeAimTouchId=t.identifier;}
+          if(hit==="attack"&&!buttons.attack.interact&&!buttons.attack.parry){mouseX=player.x+player.facing*320;mouseY=player.y;if(player.role===5||player.role===7)mobileInput.chloeAimTouchId=t.identifier;}
           pressMobileButton(hit);mobileInput.touchActions[t.identifier]="button:"+hit;continue;
         }
         if(usesMobileArcanaUI()){
@@ -1576,7 +1576,7 @@ function handleMobileTouchMove(e){
     }else if(action==="floraPending"){
       mouseX=p.x;mouseY=p.y;
     }else if(action==="floraWheel"){mouseX=p.x;mouseY=p.y;mobileInput.floraWheel.selected=floraWheelPick(p);
-    }else if(action==="button:attack"&&player.role===5){mouseX=p.x;mouseY=p.y;updateChloeAttackCharge();
+    }else if(action==="button:attack"&&(player.role===5||player.role===7)&&chloeAttackCharge.active){mouseX=p.x;mouseY=p.y;updateChloeAttackCharge();
     }else if(action==="ui"){
       const dx=p.x-mobileInput.uiLastX,dy=p.y-mobileInput.uiLastY;mouseX=p.x;mouseY=p.y;
       const totalX=p.x-mobileInput.uiStartX,totalY=p.y-mobileInput.uiStartY;
@@ -1605,7 +1605,7 @@ function handleMobileTouchEnd(e){
     if(action==="joystick"){mobileInput.joyId=null;clearMobileMoveKeys();}
     else if(action==="floraPending"){clearTimeout(mobileInput.floraWheel.timer);const p=canvasPointFromTouch(t);mouseX=p.x;mouseY=p.y;attackBuffer=10;mobileInput.floraWheel.touchId=null;}
     else if(action==="floraWheel")closeFloraWheel(true);
-    else if(action.startsWith("button:")){if(action==="button:attack"&&mobileInput.activeButtons.attack!=="interact"&&mobileInput.activeButtons.attack!=="parry"&&player.role===5&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
+    else if(action.startsWith("button:")){if(action==="button:attack"&&mobileInput.activeButtons.attack!=="interact"&&mobileInput.activeButtons.attack!=="parry"&&(player.role===5||player.role===7)&&chloeAttackCharge.active)releaseChloeAttack();releaseMobileButton(action.slice(7));mobileInput.chloeAimTouchId=null;}
     else if(action==="ui"&&mobileInput.uiTouchId===t.identifier){const p=canvasPointFromTouch(t),travel=Math.hypot(p.x-mobileInput.uiStartX,p.y-mobileInput.uiStartY),tapTime=performance.now()-mobileInput.uiStartAt;if(gameMode==="operation"&&selectedTab==="dualCrystal")window.PZCrystalWar?.pointerUp?.(p.x,p.y);if(gameMode==="match3")window.PZMatch3?.pointerUp?.(p.x,p.y);if(mobileInput.uiDeferredTap&&!mobileInput.uiMoved&&travel<10&&tapTime<500){mouseX=p.x;mouseY=p.y;clicked=true;sfx("ui");}mobileInput.uiTouchId=null;mobileInput.pointerActive=false;mobileInput.uiAxis="";mobileInput.uiDeferredTap=false;mouseDown=false;mouseAttackConsumed=false;}
     delete mobileInput.touchActions[t.identifier];
     delete mobileInput.touchPoints[t.identifier];
@@ -3513,38 +3513,6 @@ async function bootAccountSession(){
 
     cloudUser = cloudUserFromApi(restored);
 
-    const trustedUid = trustedMobileAccountUid();
-
-    if(!cloudUser?.uid || trustedUid !== cloudUser.uid){
-      console.warn(
-        "[MobileAccount] discarded untrusted cached session",
-        cloudUser?.uid || ""
-      );
-
-      try{
-        window.PZAccount?.clear?.();
-      }catch(_){}
-
-      cloudUser = null;
-      accountAuthed = false;
-      guestMode = false;
-      explicitGuestSession = false;
-      setStoredGuestSessionActive(false);
-
-      resetRuntimeDefaults();
-      reloadAccountScopedGameplay(false);
-      gameMode = "login";
-
-      setAccountMsg(
-        language === "en"
-          ? "A cached account from another session was removed. Please sign in."
-          : "已移除未经本设备确认的缓存账号，请重新登录。",
-        180
-      );
-
-      return;
-    }
-
     accountAuthed = true;
 
     if(cloudUser && cloudUser.isGuest){
@@ -3689,7 +3657,7 @@ function resetRuntimeDefaults(){  prologueDone = false;
 
   // Starter roster: Kane, Ailo and the protagonist. Nox is an S-rank
   // permanent recruit; Chloe is never granted automatically.
-  owned = [true,true,false,false,true,false,false];
+  owned = [true,true,false,false,true,false,false,false];
   cleared = {};
   hardCleared = {};
   charData = roles.map((r,i)=>({
@@ -3748,7 +3716,7 @@ function resetRuntimeDefaults(){  prologueDone = false;
   weaponOre = 5;
   skillBooks = 6;
   skillMaterials = {normal:6,skill:4,ultimate:2};
-  owned = [true,true,false,false,true,false,false];
+  owned = [true,true,false,false,true,false,false,false];
   charData = roles.map((r,i)=>({level:1,breakStage:0,skillPoints:0,normal:1,skill:1,ultimate:1,weaponLevel:1,weapon:["训练剑","训练长枪","训练双刃","训练法器","灰白核心刃","训练法器","训练盾"][i],equippedWeaponId:["training_sword","training_spear","training_dual","training_codex","gray_core_blade","training_codex","training_shield"][i]}));
   cleared = {};
   achievements = {};
@@ -4052,7 +4020,8 @@ function migrateSaveData(d){
   addMissing("shopTokenMonthKey", "");
   addMissing("shopScrewWeekKey", "");
   addMissing("crystalWarState", null);
-  if(!Array.isArray(d.owned)){ d.owned=[true,true,false,false,true,false,false]; changed=true; }
+  if(!Array.isArray(d.owned)){ d.owned=[true,true,false,false,true,false,false,false]; changed=true; }
+  while(d.owned.length<8)d.owned.push(false);
   while(d.owned.length<roles.length){ d.owned.push(false); changed=true; }
   for(const roleId of [0,1,PROTAGONIST_ROLE]){
     if(d.owned[roleId]!==true){ d.owned[roleId]=true; changed=true; }
@@ -4792,24 +4761,24 @@ function protagonistInfoLine(){
 function roleName(i){
   if(isProtagonist(i)) return protagonistName();
   const names = {
-    zh:["凯恩","艾洛","诺克斯","芙洛拉","主角","克洛伊","阿贝其·富兰克琳"],
-    en:["Kane","Ailo","Nox","Flora","Protagonist","Chloe","Abeqi Franklin"]
+    zh:["凯恩","艾洛","诺克斯","芙洛拉","主角","克洛伊","阿贝其·富兰克琳","拉文"],
+    en:["Kane","Ailo","Nox","Flora","Protagonist","Chloe","Abeqi Franklin","Raven"]
   };
   return (names[currentLang()] || names.zh)[i] || "";
 }
 function roleStyle(i){
   if(isProtagonist(i)) return language==="en" ? "S · High HP / Single Target" : "S级 · 高生命 / 单体";
   const styles = {
-    zh:["物理剑卫","风系辅助","暗系击破","冰系法术","单体输出","风系辅助","物理盾卫"],
-    en:["Physical Sword Guard","Wind Support","Dark Breaker","Ice Caster","Single Target","Wind Support","Physical Shield Guard"]
+    zh:["物理剑卫","风系辅助","暗系击破","冰系法术","单体输出","风系辅助","物理盾卫","晶属性击破"],
+    en:["Physical Sword Guard","Wind Support","Dark Breaker","Ice Caster","Single Target","Wind Support","Physical Shield Guard","Crystal Breaker"]
   };
   return (styles[currentLang()] || styles.zh)[i] || "";
 }
 
 function roleLine(i){
   const lines = {
-    zh:["烈阳，斩开黑夜。","风会记住这一击。","无名之刃，撕裂终局。","霜影落下，万物静止。","","听见了吗？风正在回应。","防线不会在我身后崩塌。"],
-    en:["Solar flame, cut through the night.","The wind will remember this strike.","Nameless blades tear through the end.","Frost descends. All becomes still.","","Can you hear it? The wind is answering.","The line will not fall behind me."]
+    zh:["烈阳，斩开黑夜。","风会记住这一击。","无名之刃，撕裂终局。","霜影落下，万物静止。","","听见了吗？风正在回应。","防线不会在我身后崩塌。","刀锋所至，结晶亦会断裂。"],
+    en:["Solar flame, cut through the night.","The wind will remember this strike.","Nameless blades tear through the end.","Frost descends. All becomes still.","","Can you hear it? The wind is answering.","The line will not fall behind me.","Where the blade passes, crystal breaks."]
   };
   return (lines[currentLang()] || lines.zh)[i] || "";
 }
@@ -4886,9 +4855,10 @@ const roles = [
   {name:"芙洛拉", element:"ice", color:"#88d8ff", sub:"#ffffff", atk:[16,20,42], skill:78, speed:3.0, style:"冰系法术", line:"霜影落下，万物静止。"},
   {name:"主角", element:"monochrome", color:"#dfe6ef", sub:"#313846", atk:[15,20,38], skill:72, speed:3.05, style:"单体输出", line:"灰白之间，斩开前路。"},
   {name:"克洛伊", element:"wind", color:"#bda7ff", sub:"#78f0c3", atk:[9,12,20], skill:58, speed:3.15, style:"风系治疗辅助", line:"别离开我的治疗范围。"},
-  {name:"阿贝其·富兰克琳", element:"physical", color:"#5db8ff", sub:"#d9f2ff", atk:[12,16,34], skill:62, speed:2.65, style:"物理盾卫", line:"防线不会在我身后崩塌。"}
+  {name:"阿贝其·富兰克琳", element:"physical", color:"#5db8ff", sub:"#d9f2ff", atk:[12,16,34], skill:62, speed:2.65, style:"物理盾卫", line:"防线不会在我身后崩塌。"},
+  {name:"拉文", element:"crystal", color:"#65e6ff", sub:"#d9fbff", atk:[12,15,18,34], skill:68, speed:3.65, style:"晶属性击破", line:"刀锋所至，结晶亦会断裂。"}
 ];
-let owned = [true,true,true,false,true,false,false];
+let owned = [true,true,true,false,true,false,false,false];
 let charData = roles.map((r,i)=>({
   level:1,
   breakStage:0,
@@ -4897,7 +4867,7 @@ let charData = roles.map((r,i)=>({
   skill:1,
   ultimate:1,
   weaponLevel:1,
-    weapon:["烈阳之刃","风语法典","终夜双刃","霜月长枪","灰核之刃","拉文德","训练盾"][i] || "训练武器"
+    weapon:["烈阳之刃","风语法典","终夜双刃","霜月长枪","灰核之刃","拉文德","训练盾","训练太刀"][i] || "训练武器"
 }));
 let shopMsg = msg("shopDefault");
 let shopTab = "recommend";
@@ -5623,6 +5593,7 @@ let chloeElementDamageAmpTimer = 0;
 let chloeTrueDamageTimer = 0;
 let chloeHealingFields = [];
 let chloeAttackCharge = {active:false,angle:0,length:120,width:120};
+let ravenCombat={mode:"",timer:0,tick:0,originX:0,originY:0,target:null,thrustTimer:0,crystalCasts:0};
 let kaneSigils = [];
 let kaneComboTargetUid = 0;
 let noxDamageAmpTimer = 0;
@@ -6546,6 +6517,7 @@ function clearTransientBattleState(){
   chloeTrueDamageTimer=0;
   chloeHealingFields=[];
   chloeAttackCharge={active:false,angle:0,length:120,width:120};
+  ravenCombat={mode:"",timer:0,tick:0,originX:0,originY:0,target:null,thrustTimer:0,crystalCasts:ravenCombat.crystalCasts||0};
   kaneSigils=[];
   noxDamageAmpTimer=0;
   windFields=[];
@@ -6561,7 +6533,7 @@ function clearRouteTransientCombat(){
   // role resources, cooldowns, team state and long-lived player buffs remain.
   projectiles=[];frostFields=[];windFields=[];bossHazards=[];kaneSigils=[];
   protagonistBindings=[];protagonistSweeps=[];protagonistDomain={active:false,life:0,max:180,tick:0,sweepIndex:0};
-  chloeHealingFields=[];chloeAttackCharge.active=false;ailoUltimateBurst={active:false,life:0,max:0};
+  chloeHealingFields=[];chloeAttackCharge.active=false;ravenCombat.mode="";ravenCombat.thrustTimer=0;ailoUltimateBurst={active:false,life:0,max:0};
   particles=[];slashes=[];texts=[];lockTarget=null;chainTarget=null;chainReady=false;
   ult.active=false;attackBuffer=0;skillBuffer=0;ultBuffer=0;dashBuffer=0;
   clearKaneBasicStacks();
@@ -7476,7 +7448,7 @@ function updateAiloCombatEffects(){
 }
 
 function beginChloeAttackCharge(){
-  if(player.role!==5 || chloeAttackCharge.active || player.attackCd>0 || attackInputLock>0 || ult.active) return false;
+  if((player.role!==5&&player.role!==7) || chloeAttackCharge.active || player.attackCd>0 || attackInputLock>0 || ult.active) return false;
   const angle=Math.atan2(mouseY-player.y,mouseX-player.x);
   chloeAttackCharge={active:true,angle:Number.isFinite(angle)?angle:0,length:120,width:120};
   attackBuffer=0;
@@ -7485,7 +7457,7 @@ function beginChloeAttackCharge(){
 
 function updateChloeAttackCharge(){
   if(!chloeAttackCharge.active) return;
-  if(player.role!==5 || ult.active || battlePaused){
+  if((player.role!==5&&player.role!==7) || ult.active || battlePaused){
     chloeAttackCharge.active=false;
     return;
   }
@@ -7506,23 +7478,62 @@ function releaseChloeAttack(){
   emitPZCrystalWarAction("attack",{charged:true,angle,length:len,targetX:player.x+ux*len,targetY:player.y+uy*len});
   player.attackCd=44;attackInputLock=20;
   const cx=player.x+ux*len*.5,cy=player.y+uy*len*.5;
-  addBladeTrail(player.x-px*halfW,player.y-py*halfW,player.x+ux*len+px*halfW,player.y+uy*len+py*halfW,"#bda7ff",24,18,"windSkill");
-  addSlash(cx,cy,Math.max(90,len*.48),"#78f0c3",18,"windField");
+  const raven=player.role===7,color=raven?"#65e6ff":"#bda7ff",sub=raven?"#d9fbff":"#78f0c3";
+  addBladeTrail(player.x-px*halfW,player.y-py*halfW,player.x+ux*len+px*halfW,player.y+uy*len+py*halfW,color,24,18,raven?"skillTrail":"windSkill");
+  addSlash(cx,cy,Math.max(90,len*.48),sub,18,raven?"skillTrail":"windField");
   for(const e of enemies){
     if(!e.alive) continue;
     const ex=e.x-player.x,ey=e.y-player.y;
     const forward=ex*ux+ey*uy,lateral=Math.abs(ex*px+ey*py);
     if(lateral<=halfW+e.r&&forward>=-e.r&&forward<=len+e.r){
-      e.weathering=Math.max(e.weathering||0,300);
-      hitEnemy(e,panelDamage(5,.68,"normal",Math.random()*9)*windDamageScale(e,5),4,panelShieldDamage(5,15,"normal"),"#bda7ff","WEATHERING");
+      if(!raven)e.weathering=Math.max(e.weathering||0,300);
+      const exclusive=raven&&roleEquippedWeaponId(7)==="aminos_blade",armorBonus=raven?1.3*(exclusive?1.15:1):1;
+      hitEnemy(e,panelDamage(player.role,raven?.54:.68,"normal",Math.random()*9)*(raven?(exclusive?1.06:1):windDamageScale(e,5)),4,panelShieldDamage(player.role,raven?52:15,"normal")*armorBonus,color,raven?"CRYSTAL THRUST":"WEATHERING");
     }
   }
-  addText(player.x+ux*len,player.y+uy*len,language==="en"?"RECTANGLE "+Math.round(len):"矩形范围 "+Math.round(len),"#bda7ff",false);
+  addText(player.x+ux*len,player.y+uy*len,language==="en"?"RECTANGLE "+Math.round(len):"矩形范围 "+Math.round(len),color,false);
   sfx("skill");doShake(5);
 }
 
 function lisaAttack(){
   beginChloeAttackCharge();
+}
+
+function registerCrystalSkillUse(){
+  ravenCombat.crystalCasts++;
+  if(ravenCombat.crystalCasts<3)return;
+  ravenCombat.crystalCasts=0;
+  for(const e of enemies)if(e.alive)e.crystalRage=true;
+  showActionPrompt(language==="en"?"CRYSTAL OVERLOAD · ENEMY DMG +10%":"晶属性过载 · 敌人暴走伤害+10%",90);
+}
+function ravenHighPriorityTarget(){return enemies.filter(e=>e.alive).sort((a,b)=>((b.shield||0)+(b.hp||0))-((a.shield||0)+(a.hp||0)))[0]||null;}
+function startRavenSequence(mode,duration){
+  const target=ravenHighPriorityTarget();if(!target)return false;
+  ravenCombat.mode=mode;ravenCombat.timer=duration;ravenCombat.tick=0;ravenCombat.originX=player.x;ravenCombat.originY=player.y;ravenCombat.target=target;
+  player.inv=Math.max(player.inv,duration+20);attackInputLock=duration+10;return true;
+}
+function ravenSkill(){
+  if(player.skillCd>0||player.energy<SKILL_ENERGY_COST||ult.active)return;
+  player.energy-=SKILL_ENERGY_COST;player.skillCd=240;registerCrystalSkillUse();
+  if(startRavenSequence("skill",120)){showCenter(language==="en"?"RAVEN · PHANTOM POSSESSION":"拉文 · 瞬身附斩",60);sfx("skill");}
+}
+function updateRavenCombat(){
+  if(ravenCombat.thrustTimer>0)ravenCombat.thrustTimer=Math.max(0,ravenCombat.thrustTimer-frameScale);
+  if(!ravenCombat.mode)return;
+  ravenCombat.timer-=frameScale;ravenCombat.tick-=frameScale;const t=ravenCombat.target;
+  if((ravenCombat.mode==="skill"||ravenCombat.mode==="ultTarget")&&t&&t.alive){
+    player.x=t.x-player.facing*28;player.y=t.y;
+    if(ravenCombat.tick<=0){ravenCombat.tick+=6;const a=Math.random()*Math.PI*2,s=90+Math.random()*65;addBladeTrail(t.x-Math.cos(a)*s,t.y-Math.sin(a)*s,t.x+Math.cos(a)*s,t.y+Math.sin(a)*s,Math.random()>.35?"#65e6ff":"#fff",15,9,"skillTrail");addSlash(t.x,t.y,92+Math.random()*45,"#65e6ff",14,"skill");addParticles(t.x,t.y,"#d9fbff",4,4);hitEnemy(t,panelDamage(7,ravenCombat.mode==="skill"?.38:.46,ravenCombat.mode==="skill"?"skill":"ultimate",Math.random()*8),1.5,panelShieldDamage(7,10,"skill"),"#65e6ff","RAPID CUT",ravenCombat.mode==="skill"?"skill":"ultimate",7);}
+  }
+  if(ravenCombat.mode==="ultStorm"){
+    player.x=ravenCombat.originX;player.y=ravenCombat.originY;
+    if(ravenCombat.tick<=0){ravenCombat.tick+=6;const phase=(120-ravenCombat.timer)*.21;for(let k=0;k<3;k++){const a=phase+k*Math.PI*2/3,r=270+k*22;addBladeTrail(player.x+Math.cos(a)*55,player.y+Math.sin(a)*55,player.x+Math.cos(a+.72)*r,player.y+Math.sin(a+.72)*r,k===1?"#fff":"#65e6ff",14,9,"ultimate");}addSlash(player.x,player.y,300+Math.sin(phase)*28,"#65e6ff",18,"ultimate");addParticles(player.x,player.y,"#d9fbff",7,6);for(const e of enemies)if(e.alive&&dist(player.x,player.y,e.x,e.y)<340){const d=Math.max(1,dist(player.x,player.y,e.x,e.y));e.vx+=(player.x-e.x)/d*5.2;e.vy+=(player.y-e.y)/d*5.2;hitEnemy(e,panelDamage(7,.27,"ultimate",Math.random()*6),1,panelShieldDamage(7,7,"ultimate"),"#65e6ff","CRYSTAL STORM","ultimate",7);}}
+  }
+  if(ravenCombat.timer>0)return;
+  player.x=ravenCombat.originX;player.y=ravenCombat.originY;
+  if(ravenCombat.mode==="ultTarget"){ravenCombat.mode="ultStorm";ravenCombat.timer=120;ravenCombat.tick=0;}
+  else if(ravenCombat.mode==="ultStorm"){ravenCombat.mode="";ravenCombat.thrustTimer=600;showCenter(language==="en"?"THRUST STATE · 10s":"突刺状态 · 10秒",75);}
+  else ravenCombat.mode="";
 }
 
 function lisaSkill(){
@@ -8134,6 +8145,7 @@ function emitPZCrystalWarAction(action,data={}){
 function attack(){
   if(player.attackCd>0 || attackInputLock>0 || ult.active) return;
   if(player.role===5){emitPZCrystalWarAction("charge",{angle:Math.atan2(mouseY-player.y,mouseX-player.x)});lisaAttack();return;}
+  if(player.role===7&&((player.chainTimer>0&&player.chain>=3)||ravenCombat.thrustTimer>0)){beginChloeAttackCharge();return;}
   const attackEvent={combo:player.chainTimer<=0?1:(player.chain%3)+1};if(player.role===1||player.role===3){const aim=getAimPoint(360);attackEvent.targetX=aim.x;attackEvent.targetY=aim.y;}emitPZCrystalWarAction("attack",attackEvent);
   damageNearbyBattleCrates(player.x+player.facing*55,player.y,118);
   harvestCrystalWarNodeByAttack();
@@ -8144,7 +8156,7 @@ function attack(){
   const role=roles[player.role];
   const cd = charData[player.role];
   if(player.chainTimer<=0) player.chain=0;
-  player.chain=(player.chain%3)+1; player.chainTimer=38;
+  player.chain=(player.chain%(player.role===7?4:3))+1; player.chainTimer=38;
   const step=player.chain, sx=player.x+player.facing*(step===3?48:34), range=step===3?105:82, color=step===3?role.color:role.sub;
   startAttackMotion(step,step===3);
   player.attackCd=(step===3?32:28)+(player.role===6?3:0);
@@ -8154,7 +8166,7 @@ function attack(){
   for(const e of enemies){
     if(e.alive && withinDist(sx,player.y,e.x,e.y,range)){
       spawnMetalImpact(e.x,e.y,step===3?16:9,step===3?7:4,!!e.boss);
-      let damageScale=1,shieldDamage=step===3?panelShieldDamage(player.role,46,"normal"):panelShieldDamage(player.role,18,"normal"),label=step===3?"3rd HIT":null;
+      let damageScale=1,shieldDamage=step===3?panelShieldDamage(player.role,player.role===7?72:46,"normal"):panelShieldDamage(player.role,player.role===7?25:18,"normal"),label=step===3?"3rd HIT":null;
       if(player.role===0 || (step===3&&isPhysicalRole(player.role))){
         const triggered=step===3 && isPhysicalRole(player.role) && (e.physicalPain||0)>0;
         if(triggered){
@@ -8185,6 +8197,7 @@ function skill(){
     const value=grantTeamShield(100);addSlash(player.x,player.y,240,"#5db8ff",25,"shield");addParticles(player.x,player.y,"#d9f2ff",22,6);
     showCenter((language==="en"?"FRANKLIN FORMATION · TEAM SHIELD ":"弗兰克琳阵线 · 全队护盾 ")+value,65);sfx("skill");return;
   }
+  if(player.role===7){ravenSkill();return;}
   const role=roles[player.role]; const cd=charData[player.role]; player.energy-=SKILL_ENERGY_COST; player.skillCd=68;
   const sx=player.x+player.facing*65;
   damageNearbyBattleCrates(sx,player.y,147);
@@ -8229,6 +8242,7 @@ function resolveUltimate(){
     for(const e of enemies)if(e.alive)hitEnemy(e,panelDamage(6,4.4,"ultimate",Math.random()*65),28,panelShieldDamage(6,120,"ultimate"),"#5db8ff","FULL BLAST","ultimate",6);
     showCenter((language==="en"?"HOLD THE LINE · DMG +20% · SHIELD ":"坚守阵线 · 全队增伤20% · 护盾 ")+value+(language==="en"?" · COUNTER ×2":" · 反击×2"),90);return;
   }
+  if(ult.role===7){registerCrystalSkillUse();startRavenSequence("ultTarget",72);showCenter(language==="en"?"AMINOS · THREE-PHASE EXECUTION":"阿米诺斯 · 三段处刑",80);return;}
   const role=roles[ult.role]; const cd=charData[ult.role];
   damageNearbyBattleCrates(player.x,player.y,330);
   if(ult.role===0){
@@ -9647,26 +9661,20 @@ function updateLogin(){
   }
 
   if(cloudUser && !guestMode){
-    const canStart=cloudAuthStateResolved&&performance.now()>=mobileAccountStartReadyAt;
-    if((clicked&&inRect(W/2-155,H/2-18,310,62)&&canStart) || ((justPressed("enter")||justPressed(" "))&&canStart)){
+    if(clicked || justPressed("enter") || justPressed(" ")){
       clicked=false;
       startLoggedInAccountGame();
-    }else if(clicked&&inRect(W/2-125,H/2+82,250,40)){
-      clicked=false;signOutAndClearLocal(true);
     }
     clicked=false;
     return;
   }
 
   if(guestMode && hasCreatedProfile && validPlayerName(playerName)){
-    const canStart=performance.now()>=mobileAccountStartReadyAt;
-    if((clicked&&inRect(W/2-155,H/2-18,310,62)&&canStart) || ((justPressed("enter")||justPressed(" "))&&canStart)){
+    if(clicked || justPressed("enter") || justPressed(" ")){
       clicked=false;
       setStoredGuestSessionActive(true);
       explicitGuestSession=true;
       startLoading(startTargetAfterAuth());
-    }else if(clicked&&inRect(W/2-125,H/2+82,250,40)){
-      clicked=false;exitLocalGuestSession();
     }
     clicked=false;
     return;
@@ -11132,7 +11140,7 @@ const CRYSTAL_EXCHANGE_ITEMS=[
   {id:"fragments",cost:180,max:2,zh:"属性碎片组",en:"Element Fragments",descZh:"六种属性碎片各1",descEn:"1 of each Element Fragment",apply(){for(const key of ["fire","physical","ice","wind","dark","crystal"])elementalFragments[key]=(elementalFragments[key]||0)+1;}}
 ];
 function permanentRecruitItems(){
-  return [{i:0,price:1800},{i:1,price:2200},{i:2,price:2400},{i:5,price:3200},{i:6,price:3600}];
+  return [{i:0,price:1800},{i:1,price:2200},{i:2,price:2400},{i:5,price:3200},{i:6,price:3600},{i:7,price:3800}];
 }
 function permanentRecruitMaxScroll(){
   const items=permanentRecruitItems(),cardW=430,gap=20,visibleW=W-112;
@@ -11463,6 +11471,8 @@ function updateBattle(){
   updateKaneCombatEffects();
   updateAiloCombatEffects();
   updateChloeCombatEffects();
+  updateRavenCombat();
+  if(ravenCombat.mode){updateEffects();return;}
   if(hitStop>0){ hitStop -= fpsScale(); updateEffects(); return; }
   if(ult.active){ ult.timer++; if(ult.timer===48&&!ult.hitDone){ult.hitDone=true; resolveUltimate();} if(ult.timer>=96)ult.active=false; updateEffects(); return; }
   updateProjectiles();
@@ -11490,7 +11500,7 @@ function updateBattle(){
 
   const attackPressed = mouseDown && !mouseAttackConsumed;
   if(attackPressed){
-    if(player.role===5) beginChloeAttackCharge();
+    if(player.role===5 || (player.role===7&&((player.chainTimer>0&&player.chain>=3)||ravenCombat.thrustTimer>0))) beginChloeAttackCharge();
     else if(player.attackCd<=6) attackBuffer=10;
     mouseAttackConsumed=true;
   }
@@ -11764,7 +11774,7 @@ function updateBattle(){
 function enemyHit(e){
   if(dist(player.x,player.y,e.x,e.y)<(e.boss?105:78)&&player.inv<=0&&player.guardTimer<=0){
     if(e.bossKros && e.phase>=2) playerBleedTimer=Math.max(playerBleedTimer,150);
-    let dmg = e.boss ? (e.phase===3?26:18) : (e.rage?14:e.type==="fireCrystal"?12:10);
+    let dmg = e.boss ? (e.phase===3?26:18) : (e.rage?14:e.type==="fireCrystal"?12:10);if(e.crystalRage)dmg*=1.10;
     if(e.bossKros)dmg*=Number(e.bossDamageScale||1);
     if(battleHardMode)dmg*=1.28;
     if(e.crystalColossus && e.phase>=2) dmg*=1.10;
@@ -13766,13 +13776,13 @@ function drawLogin(){
       drawDeletionPeriodPrompt();
       return;
     }
-    drawBtn(tr("以此账号进入","CONTINUE WITH THIS ACCOUNT"),"",W/2-155,H/2-18,310,62,cloudAuthStateResolved&&performance.now()>=mobileAccountStartReadyAt,"#ffe066");
+    const pulse=.58 + Math.sin(menuPulse/20)*.28;
+    ctx.globalAlpha=pulse;ctx.fillStyle="#ffe066";ctx.font="bold 26px "+FONT_UI;
+    ctx.fillText(tr("点击开始","Tap To Start"),W/2,H/2+18);ctx.globalAlpha=1;
 
     ctx.fillStyle="rgba(255,255,255,.58)";
     ctx.font="15px " + FONT_UI;
     ctx.fillText(cloudUser.email || cloudTx("cloudLoggedIn"),W/2,H/2+62);
-    drawBtn(tr("切换账号","SWITCH ACCOUNT"),"",W/2-125,H/2+82,250,40,true,"#9aa7bd");
-
     ctx.fillStyle="rgba(255,255,255,.58)";
     ctx.font="15px " + FONT_UI;
     ctx.fillText(accountMsg || cloudSyncStatus || "Salt Fish Studio", W/2, H-70);
@@ -13784,32 +13794,17 @@ function drawLogin(){
   }
 
   if(guestMode && hasCreatedProfile && validPlayerName(playerName)){
-  const canStart = performance.now() >= mobileAccountStartReadyAt;
-
-  if(
-    (clicked && inRect(W/2-155,H/2-18,310,62) && canStart) ||
-    ((justPressed("enter") || justPressed(" ")) && canStart)
-  ){
-    clicked = false;
-
-    // 本地 Guest 存档存在，但在线 Guest 身份不存在：
-    // 必须先建立/恢复在线身份，不能直接进入大厅。
-    if(!cloudUser){
-      accountGuestFlow();
-      return;
-    }
-
-    setStoredGuestSessionActive(true);
-    explicitGuestSession = true;
-    startLoading(startTargetAfterAuth());
-  }else if(clicked && inRect(W/2-125,H/2+82,250,40)){
-    clicked = false;
-    exitLocalGuestSession();
+    const pulse=.58 + Math.sin(menuPulse/20)*.28;
+    ctx.globalAlpha=pulse;ctx.fillStyle="#ffe066";ctx.font="bold 26px "+FONT_UI;
+    ctx.fillText(tr("点击开始","Tap To Start"),W/2,H/2+18);ctx.globalAlpha=1;
+    ctx.fillStyle="rgba(255,255,255,.66)";ctx.font="15px "+FONT_UI;
+    ctx.fillText((playerName||"PLAYER")+"  ·  "+tr("游客本地存档","Local Guest Save"),W/2,H/2+62);
+    ctx.fillStyle="rgba(255,255,255,.48)";
+    ctx.fillText(accountMsg||tr("游客进度已保存在此设备","Guest progress is saved on this device"),W/2,H-70);
+    ctx.fillStyle="rgba(255,255,255,.32)";ctx.font="12px "+FONT_UI;
+    ctx.fillText(tr("本地游客 / 点击开始进入游戏","Local guest / Tap to start"),W/2,H-38);
+    drawLoginSettingsIcon();return;
   }
-
-  clicked = false;
-  return;
-}
 
   const panelX=W/2-210, panelY=165, panelW=420, panelH=360;
   ctx.fillStyle="rgba(0,0,0,.36)";
@@ -18806,16 +18801,16 @@ function drawPortrait(x,y,w,h,r,lock=false){
 let operatorPageMode = "list";
 
 function executorRank(i){
-  return (i===PROTAGONIST_ROLE || i===2 || i===3 || i===5 || i===6) ? "S" : "A";
+  return (i===PROTAGONIST_ROLE || i===2 || i===3 || i===5 || i===6 || i===7) ? "S" : "A";
 }
 function executorElement(i){
   if(i===PROTAGONIST_ROLE) return language==="en" ? "Gray" : "灰白";
-  const zh=["物理","风","暗","冰","","风","物理"];
-  const en=["Physical","Wind","Dark","Ice","","Wind","Physical"];
+  const zh=["物理","风","暗","冰","","风","物理","晶"];
+  const en=["Physical","Wind","Dark","Ice","","Wind","Physical","Crystal"];
   return (language==="en"?en:zh)[i] || "";
 }
 function executorOrder(){
-  const order=[PROTAGONIST_ROLE,0,1,2,3,5,6];
+  const order=[PROTAGONIST_ROLE,0,1,2,3,5,6,7];
   return order.filter(i=>roles[i]);
 }
 function executorListIndexToRole(listIdx){
@@ -19273,6 +19268,11 @@ function skillMechanicText(i,key,lv){
     if(key==="skill") return language==="en" ? "Grants every living squad member a 100-point shield." : "为全队仍可作战的角色提供100点护盾。";
     return language==="en" ? "Bombards all enemies, grants team shield 400 and squad damage; resets Counter to 2. Counter auto-parries monster attacks." : "轰炸全场敌人并赋予全队400盾值与伤害提升；将反击重置为2次，受怪物攻击时自动弹刀并反伤。";
   }
+  if(i===7){
+    if(key==="normal") return language==="en" ? "Four-hit katana chain. Hit 3 gains +20% shield break; hold hit 4 to aim a rectangular high-speed thrust." : "四段太刀连击；第三段破盾提高20%，第四段长按拖动矩形范围并松手高速突刺。";
+    if(key==="skill") return language==="en" ? "Possesses a high-HP enemy for 2s of automatic rapid slashes, then instantly returns to the cast position." : "锁定高血量敌人附身高速连斩2秒；期间不可操作，结束后瞬间返回释放位置。";
+    return language==="en" ? "1.2s target rush, 2s pulling blade storm, then 10s Thrust State. Recommended: Raven + Kane + Abeqi + Chloe." : "锁定连斩1.2秒，归位后聚怪挥砍2秒，再进入10秒突刺状态。推荐配队：拉文 + 凯恩 + 阿贝其 + 克洛伊。";
+  }
   if(isProtagonist(i)){
     if(key==="normal") return language==="en" ? "Three-hit slash with fading monochrome trails." : "三段斩击，附带向外消散的黑白线条。";
     if(key==="skill") return language==="en" ? "Ranged bind: immobilizes for 3s and deals 50 damage each second." : "远程缚锁：定身3秒，每秒造成50点伤害。";
@@ -19414,6 +19414,7 @@ const WEAPON_MASTER=[
   {id:"training_dual",nameZh:"训练双刃",nameEn:"Training Dual Blades",rarity:"B",type:"dual",baseAtk:56,crit:1,passiveZh:"标准训练双刃。",passiveEn:"Standard training dual blades.",price:0},
   {id:"training_codex",nameZh:"训练法器",nameEn:"Training Codex",rarity:"B",type:"codex",baseAtk:54,crit:0,passiveZh:"标准训练法器。",passiveEn:"Standard training catalyst.",price:0},
   {id:"training_shield",nameZh:"训练盾",nameEn:"Training Shield",rarity:"B",type:"shield",baseAtk:52,crit:0,passiveZh:"标准训练盾卫武装。",passiveEn:"Standard shield-guard weapon.",price:0},
+  {id:"training_katana",nameZh:"训练太刀",nameEn:"Training Katana",rarity:"B",type:"katana",baseAtk:61,crit:2,passiveZh:"拉文获得时默认装备的训练太刀。",passiveEn:"Training katana equipped by Raven on acquisition.",price:0},
   {id:"everwinter_codex",nameZh:"永冬",nameEn:"Everwinter",rarity:"S",type:"codex",baseAtk:116,crit:6,passiveZh:"冰属性伤害提升10%；法器定位执行官均可使用。",passiveEn:"Ice DMG +10%; usable by Codex operators.",price:1100,limited:true},
   {id:"sun_blade",nameZh:"烈阳之刃",nameEn:"Solar Blade",rarity:"S",type:"sword",baseAtk:120,crit:8,passiveZh:"普攻伤害提升12%。",passiveEn:"Normal DMG +12%.",price:1300},
   {id:"wind_codex",nameZh:"风语法典",nameEn:"Wind Codex",rarity:"A",type:"codex",baseAtk:95,crit:4,passiveZh:"支援效率提升。",passiveEn:"Support efficiency increased.",price:800},
@@ -19423,7 +19424,8 @@ const WEAPON_MASTER=[
   {id:"frostmoon_spear",nameZh:"霜月长枪",nameEn:"Frostmoon Spear",rarity:"A",type:"spear",baseAtk:100,crit:4,passiveZh:"技能伤害提升。",passiveEn:"Skill damage increased.",price:850},
   {id:"starlight_spear",nameZh:"流光长枪",nameEn:"Starlight Spear",rarity:"S",type:"spear",baseAtk:125,crit:7,passiveZh:"命中回复少量能量。",passiveEn:"Gain a small amount of energy on hit.",price:1150},
   {id:"lavender",nameZh:"拉文德",nameEn:"Lavender",rarity:"S",type:"codex",baseAtk:112,crit:5,passiveZh:"风化持续时间提高。",passiveEn:"Extends Weathering duration.",price:1200},
-  {id:"franklin_shield",nameZh:"弗兰克琳之盾",nameEn:"Franklin's Shield",rarity:"S",type:"shield",baseAtk:0,crit:0,passiveZh:"护盾值提升5%；大招充能效率+3%；满级攻击加成300。",passiveEn:"Shield value +5%; Ultimate charge +3%; grants 300 ATK at max level.",price:1350}
+  {id:"franklin_shield",nameZh:"弗兰克琳之盾",nameEn:"Franklin's Shield",rarity:"S",type:"shield",baseAtk:0,crit:0,passiveZh:"护盾值提升5%；大招充能效率+3%；满级攻击加成300。",passiveEn:"Shield value +5%; Ultimate charge +3%; grants 300 ATK at max level.",price:1350},
+  {id:"aminos_blade",nameZh:"阿米诺斯之刃",nameEn:"Blade of Aminos",rarity:"S",type:"katana",baseAtk:132,crit:9,exclusiveRole:7,passiveZh:"拉文专属：突刺破甲提高15%，突刺伤害提高6%。",passiveEn:"Raven exclusive: thrust armor break +15% and thrust damage +6%.",price:1380}
 ];
 function permanentWeaponCatalog(){return WEAPON_MASTER.filter(w=>!w.limited);}
 
@@ -19435,11 +19437,12 @@ function roleWeaponType(i){
   if(i===3) return "codex";
   if(i===5) return "codex";
   if(i===6) return "shield";
+  if(i===7) return "katana";
   return "sword";
 }
 function weaponTypeLabel(type){
-  const zh={sword:"单手剑",codex:"法器",dual:"双刃",spear:"长枪",shield:"盾武",core:"专武"};
-  const en={sword:"Sword",codex:"Codex",dual:"Dual Blades",spear:"Spear",shield:"Shield",core:"Exclusive"};
+  const zh={sword:"单手剑",codex:"法器",dual:"双刃",spear:"长枪",shield:"盾武",katana:"太刀",core:"专武"};
+  const en={sword:"Sword",codex:"Codex",dual:"Dual Blades",spear:"Spear",shield:"Shield",katana:"Katana",core:"Exclusive"};
   return (language==="en"?en:zh)[type]||type;
 }
 function weaponData(id){ return WEAPON_MASTER.find(w=>w.id===id)||WEAPON_MASTER[0]; }
@@ -19453,6 +19456,7 @@ function defaultWeaponIdForRole(i){
   if(i===2) return "training_dual";
   if(i===3 || i===5) return "training_codex";
   if(i===6) return "training_shield";
+  if(i===7) return "training_katana";
   return "training_sword";
 }
 function ensureWeaponBag(){
@@ -21090,6 +21094,7 @@ function drawBootSequence(){
 
   gameMode = bootNextMode || "login";
   if(gameMode === "login" && audioUnlocked) requestLoginBgmPlay();
+
 }
 
 
@@ -21728,7 +21733,7 @@ function archiveStoryData(){return[
   {title:["第二章 · 再次深入","Chapter 2 · Return"],summary:["小队再次深入异常区域，调查晶体扩张、撤离路线与不断变化的空间结构。","The squad returns to investigate crystal expansion, evacuation routes, and changing spatial structures."],keywords:["空间异常","撤离路线","晶体扩张"]},
   {title:["第三章 · 扩张","Chapter 3 · Expansion"],summary:["Project 4 的边界继续扩大。北区疏散线、媒体记录和雨云下的监测数据揭示新的危机。","Project 4 continues expanding. Northern evacuation lines, media records, and rain-cloud monitoring reveal a new crisis."],keywords:["北区疏散","扩张监测","小赖"]}
 ];}
-function archiveRoleData(id){const names={0:["凯恩","Kane"],1:["艾洛","Ailo"],2:["诺克斯","Nox"],3:["芙洛拉","Flora"],4:["隐者","Hermit"],5:["克洛伊","Chloe"],6:["阿贝其·富兰克琳","Abeqi Franklin"]},classes={0:["剑卫","Swordguard"],1:["法武","Arts Weapon"],2:["盾卫","Defender"],3:["法武","Arts Weapon"],4:["引领","Guide"],5:["协辅","Support"],6:["盾卫","Defender"]},mechanics={0:["连续斩击、第三段重击与火焰标记，适合维持近战压制。","Combo slashes, a heavy third hit, and flame marks sustain melee pressure."],1:["远程元素攻击与范围技能，负责安全距离输出和群体处理。","Ranged elemental attacks and area skills handle groups from safety."],2:["承受正面压力，通过防御、弹刀和护盾保护队伍。","Holds the front with defense, parries, and squad protection."],3:["冰属性群伤与冻结控制，可中断敌群行动并创造输出窗口。","Ice area damage and Freeze interrupt groups and create damage windows."],4:["根据主线成长的核心执行官，擅长切换节奏与衔接队伍机制。","A story-synced core operator who links team mechanics and tempo."],5:["为队友提供增益、连携条件与战场辅助。","Provides buffs, chain conditions, and battlefield utility."],6:["为全队提供护盾；终结技轰炸全场，并重置2次自动弹刀反击。","Grants squad shields; her ultimate bombards the field and resets two automatic counters."]};return{name:names[id]||[roleName(id),roleName(id)],className:classes[id]||[roleStyle(id),roleStyle(id)],mechanic:mechanics[id]||[roleStyle(id),roleStyle(id)],position:id===6?["前排承伤 / 团队护盾 / 反击","Frontline tank / squad shield / counter"]:id===3?["群体控制 / 法术输出","Crowd control / Arts damage"]:id===4?["队伍核心 / 机制引导","Team core / mechanic enabler"]:[roleStyle(id),roleStyle(id)]};}
+function archiveRoleData(id){const names={0:["凯恩","Kane"],1:["艾洛","Ailo"],2:["诺克斯","Nox"],3:["芙洛拉","Flora"],4:["隐者","Hermit"],5:["克洛伊","Chloe"],6:["阿贝其·富兰克琳","Abeqi Franklin"],7:["拉文","Raven"]},classes={0:["剑卫","Swordguard"],1:["法武","Arts Weapon"],2:["盾卫","Defender"],3:["法武","Arts Weapon"],4:["引领","Guide"],5:["协辅","Support"],6:["盾卫","Defender"],7:["击破","Breaker"]},mechanics={0:["连续斩击、第三段重击与火焰标记，适合维持近战压制。","Combo slashes, a heavy third hit, and flame marks sustain melee pressure."],1:["远程元素攻击与范围技能，负责安全距离输出和群体处理。","Ranged elemental attacks and area skills handle groups from safety."],2:["承受正面压力，通过防御、弹刀和护盾保护队伍。","Holds the front with defense, parries, and squad protection."],3:["冰属性群伤与冻结控制，可中断敌群行动并创造输出窗口。","Ice area damage and Freeze interrupt groups and create damage windows."],4:["根据主线成长的核心执行官，擅长切换节奏与衔接队伍机制。","A story-synced core operator who links team mechanics and tempo."],5:["为队友提供增益、连携条件与战场辅助。","Provides buffs, chain conditions, and battlefield utility."],6:["为全队提供护盾；终结技轰炸全场，并重置2次自动弹刀反击。","Grants squad shields; her ultimate bombards the field and resets two automatic counters."],7:["高速太刀连斩、主动矩形突刺与高额破盾；晶技能累计3次会使敌人暴走。","Fast katana chains, aimed rectangular thrusts, and high shield break. Three Crystal casts enrage enemies."]};return{name:names[id]||[roleName(id),roleName(id)],className:classes[id]||[roleStyle(id),roleStyle(id)],mechanic:mechanics[id]||[roleStyle(id),roleStyle(id)],position:id===7?["高速击破 / 破盾 / 聚怪","Rapid break / shield break / grouping"]:id===6?["前排承伤 / 团队护盾 / 反击","Frontline tank / squad shield / counter"]:id===3?["群体控制 / 法术输出","Crowd control / Arts damage"]:id===4?["队伍核心 / 机制引导","Team core / mechanic enabler"]:[roleStyle(id),roleStyle(id)]};}
 function archiveAnomalyData(){return[
  {title:["Project 4","Project 4"],body:["持续扩张的封锁区域。其内部道路、建筑和天气记录会发生不符合常理的变化。","An expanding exclusion zone whose roads, buildings, and weather records change unnaturally."]},
  {title:["晶体人","Crystal Humanoid"],body:["具有人形轮廓的晶体生命。会模仿战斗行为，并对特定核心频率产生回应。","A humanoid crystal life-form that imitates combat behavior and responds to core frequencies."]},
@@ -21744,7 +21749,8 @@ const ARCHIVE_COMBAT_RECORDS={
 3:{normal:["霜晶术式","Frost Formula"],normalText:["发射冰属性术式攻击，连续命中可稳定压低敌群行动空间。","Fires Ice formulas that steadily restrict enemy movement."],skill:["寒域冻结","Frozen Domain"],skillText:["在指定区域生成寒域，对敌群造成伤害并施加冻结控制。","Creates a frozen domain that damages and freezes groups."],ultimate:["永冬降临","Everwinter"],ultimateText:["展开覆盖战场的大型冰雪领域，对全部目标造成多段冰属性伤害。","Covers the field in an Everwinter domain, dealing multiple waves of Ice damage."]},
 4:{normal:["灰白刃式","Ash-White Form"],normalText:["以核心刃完成稳定连段，并根据主线成长获得更高的综合作战能力。","Uses the Core Blade for stable chains and gains broader combat ability through story progression."],skill:["边界切割","Boundary Sever"],skillText:["切开前方异常空间，对直线范围目标造成伤害与削韧。","Severs anomalous space ahead, damaging and staggering targets in a line."],ultimate:["灰白领域","Ash-White Domain"],ultimateText:["展开持续领域，对领域内敌人反复造成伤害，并连接队伍作战节奏。","Deploys a persistent field that repeatedly damages enemies and links squad tempo."]},
 5:{normal:["协同射击","Coordinated Fire"],normalText:["以中距离攻击协助队伍，稳定触发辅助效果。","Supports the squad with steady mid-range fire."],skill:["协辅矩阵","Support Matrix"],skillText:["部署辅助领域，为队友提供增益、恢复与连携条件。","Deploys a support field that grants buffs, recovery, and Chain conditions."],ultimate:["全域协同","Total Coordination"],ultimateText:["强化全队战斗循环，并在关键时刻维持队伍状态。","Strengthens the squad's combat loop and stabilizes the team during critical moments."]},
-6:{normal:["重盾击列","Heavy Shield Sequence"],normalText:["以较慢的重盾攻击推进，最后一段造成显著物理伤害与削韧。","A slower heavy-shield sequence whose final hit deals strong Physical damage and stagger."],skill:["阵线护盾","Line Shield"],skillText:["为全队赋予100点护盾。护盾以蓝色边框围绕生命条显示。","Grants every squad member a 100-point shield, shown as a blue frame around the HP bar."],ultimate:["坚守阵线","Hold the Line"],ultimateText:["轰炸全场敌人，为全队赋予400点护盾与伤害提升，并将阿贝其的反击次数重置为2次。受到攻击时反击会自动弹刀并伤害攻击者。","Bombards all enemies, grants the squad 400 Shield and a damage bonus, and resets Abeqi's two Counters. A Counter automatically parries an incoming attack and damages the attacker."]}
+6:{normal:["重盾击列","Heavy Shield Sequence"],normalText:["以较慢的重盾攻击推进，最后一段造成显著物理伤害与削韧。","A slower heavy-shield sequence whose final hit deals strong Physical damage and stagger."],skill:["阵线护盾","Line Shield"],skillText:["为全队赋予100点护盾。护盾以蓝色边框围绕生命条显示。","Grants every squad member a 100-point shield, shown as a blue frame around the HP bar."],ultimate:["坚守阵线","Hold the Line"],ultimateText:["轰炸全场敌人，为全队赋予400点护盾与伤害提升，并将阿贝其的反击次数重置为2次。受到攻击时反击会自动弹刀并伤害攻击者。","Bombards all enemies, grants the squad 400 Shield and a damage bonus, and resets Abeqi's two Counters. A Counter automatically parries an incoming attack and damages the attacker."]},
+7:{normal:["四式晶断","Crystal Sever Forms"],normalText:["四段太刀连击；第三段强化破盾，第四段由玩家拖拽长方形范围并控制方向后高速突刺。","Four katana strikes; hit three gains extra shield break and hit four is a player-aimed rectangular thrust."],skill:["瞬身附斩","Phantom Possession"],skillText:["附身高血量目标自动高速连斩，期间不可操作，结束后返回释放位置。","Possesses a high-HP target for automatic rapid slashes, then returns to the cast point."],ultimate:["阿米诺斯处刑式","Aminos Execution"],ultimateText:["锁定连斩后归位聚怪挥砍，随后进入10秒主动突刺状态；晶技能累计3次令敌人暴走并增伤10%。","Slashes a priority target, returns for a pulling storm, then enters a 10s player-controlled Thrust State. Three Crystal casts enrage enemies for +10% damage."]}
 };
 function archiveStorySource(ch){if(ch===0)return language==="en"?window.PZ_CHAPTER0_STORY_EN:window.PZ_CHAPTER0_STORY_ZH;if(ch===1)return language==="en"?window.PZ_CHAPTER1_STORY_EN:window.PZ_CHAPTER1_STORY_ZH;if(ch===2)return language==="en"?window.PZ_CHAPTER2_STORY_EN:window.PZ_CHAPTER2_STORY_ZH;const a=language==="en"?window.PZ_CHAPTER3_PART1_STORY_EN:window.PZ_CHAPTER3_PART1_STORY_ZH,b=language==="en"?window.PZ_CHAPTER3_PART2_STORY_EN:window.PZ_CHAPTER3_PART2_STORY_ZH;return Object.assign({},a||{},b||{});}
 function archiveStoryLines(ch){const src=archiveStorySource(ch)||{},out=[];Object.keys(src).sort((a,b)=>(+a||0)-(+b||0)).forEach(stage=>{out.push({heading:(language==="en"?"STAGE ":"关卡 ")+stage});for(const line of src[stage]||[]){if(Array.isArray(line))out.push({speaker:String(line[0]||""),text:String(line[1]||"")});else if(line&&typeof line==="object")out.push({speaker:String(line.speaker||line.name||""),text:String(line.text||line.content||"")});}});return out;}
@@ -21763,7 +21769,8 @@ const ARCHIVE_IDENTITY_RECORDS={
   3:{identity:["医疗与冰系术式执行官","Medical and Ice Arts Executor"],affiliation:["雷文哈多医疗支援体系","Ravenhado Medical Support Service"],profession:["职业法武 / 控制与救护","Professional Arts Weapon / Control and Aid"],status:["现役 · 战地医疗支援","Active · Field Medical Support"]},
   4:{identity:["异常核心共鸣者","Anomaly Core Resonator"],affiliation:["Project 4 联合调查队","Project 4 Joint Investigation Team"],profession:["引领者 / 核心刃使用者","Guide / Core-Blade User"],status:["重点观察 · 主线行动人员","Under Observation · Story Operations"]},
   5:{identity:["协同作战执行官","Coordinated Operations Executor"],affiliation:["雷文哈多综合支援组","Ravenhado Integrated Support Unit"],profession:["职业协辅 / 战场增益与恢复","Professional Support / Buffs and Recovery"],status:["现役 · 小队支援席","Active · Squad Support"]},
-  6:{identity:["重装防线执行官","Heavy Defensive-Line Executor"],affiliation:["雷文哈多防卫体系","Ravenhado Defense Service"],profession:["职业盾卫 / 团队护盾与反击","Professional Defender / Shields and Counters"],status:["现役 · 前线防卫","Active · Frontline Defense"]}
+  6:{identity:["重装防线执行官","Heavy Defensive-Line Executor"],affiliation:["雷文哈多防卫体系","Ravenhado Defense Service"],profession:["职业盾卫 / 团队护盾与反击","Professional Defender / Shields and Counters"],status:["现役 · 前线防卫","Active · Frontline Defense"]},
+  7:{identity:["S级晶属性执行官","S-Rank Crystal Executor"],affiliation:["雷文哈多高速击破编队","Ravenhado Rapid Break Unit"],profession:["职业击破 / 太刀突刺与破甲","Professional Breaker / Katana Thrust and Armor Break"],status:["常驻现役 · 阿米诺斯之刃适配者","Active Permanent Roster · Blade of Aminos User"]}
 };
 const drawArchiveEntryDetailBeforeIdentity=drawArchiveEntryDetail;
 drawArchiveEntryDetail=function(){
