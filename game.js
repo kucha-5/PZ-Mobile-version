@@ -295,12 +295,21 @@ function applyRenderQuality(){
 
   if(canvas.width!==renderW) canvas.width = renderW;
   if(canvas.height!==renderH) canvas.height = renderH;
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
+  const mobileLayout=document.documentElement.dataset.pzDevice==="mobile"||document.documentElement.dataset.pzDevice==="tablet"||(window.matchMedia&&matchMedia("(pointer:coarse)").matches);
+  if(mobileLayout) applyMobileCanvasAspect();
+  else {canvas.style.width = "100%";canvas.style.height = "100%";}
 
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.imageSmoothingEnabled = true;
   if("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
+}
+
+function applyMobileCanvasAspect(){
+  const wrap=document.getElementById("gameWrap");if(!wrap)return;
+  const availableW=Math.max(1,wrap.clientWidth||innerWidth),availableH=Math.max(1,wrap.clientHeight||innerHeight),logicalAspect=LOGICAL_W/LOGICAL_H;
+  let displayW=availableW,displayH=displayW/logicalAspect;
+  if(displayH>availableH){displayH=availableH;displayW=displayH*logicalAspect;}
+  canvas.style.width=Math.max(1,Math.floor(displayW))+"px";canvas.style.height=Math.max(1,Math.floor(displayH))+"px";
 }
 
 function setRenderQualitySetting(q){
@@ -733,10 +742,18 @@ document.addEventListener("touchstart",unlockAudio,{capture:true,passive:true});
 
 function restoreMobileAudioAfterInterruption(){
   if(!mobileInput.enabled||!audioUnlocked||document.hidden)return;
+  mobileAudioBackgrounded=false;
   try{if(audioCtx&&(audioCtx.state==="suspended"||audioCtx.state==="interrupted"))Promise.resolve(audioCtx.resume()).then(retryActiveBgmAfterUnlock).catch(()=>{});else retryActiveBgmAfterUnlock();}catch(_){}
 }
+let mobileAudioBackgrounded=false;
+function suspendMobileAudioForBackground(){
+  if(!mobileInput.enabled)return;mobileAudioBackgrounded=true;
+  for(const track of [loginBgmAudio,worldBgmAudio,shopBgmAudio,bossKrosBgmAudio,chapterBgmAudio])if(track&&!track.paused){try{track.pause();}catch(_){}}
+  try{if(audioCtx&&audioCtx.state==="running")audioCtx.suspend().catch(()=>{});}catch(_){}
+}
+window.addEventListener("pagehide",suspendMobileAudioForBackground,{passive:true});
 window.addEventListener("pageshow",()=>setTimeout(restoreMobileAudioAfterInterruption,80),{passive:true});
-document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(restoreMobileAudioAfterInterruption,80);},{passive:true});
+document.addEventListener("visibilitychange",()=>{if(document.hidden)suspendMobileAudioForBackground();else setTimeout(restoreMobileAudioAfterInterruption,80);},{passive:true});
 
 function audioEase01(x){
   x = clamp(Number(x) || 0, 0, 1);
@@ -1367,6 +1384,7 @@ function applyMobileViewportLayout(force=false){
   // remains 1120×660, so gameplay coordinates and PC behavior stay unchanged.
   wrap.style.left="0px";wrap.style.top="0px";wrap.style.transform="none";
   wrap.style.width=Math.floor(vw)+"px";wrap.style.height=Math.floor(vh)+"px";
+  requestAnimationFrame(applyMobileCanvasAspect);
 }
 
 function setKeyVirtual(key, down){
