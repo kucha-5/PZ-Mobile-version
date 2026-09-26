@@ -875,7 +875,7 @@ function requestWorldBgmPlay(){
   const isBossKrosBattle=gameMode==="battle" && battleModeSource==="bossKros";
   if(["story","team","settlement","defeat","projectArea"].includes(gameMode) || (gameMode==="battle"&&!isBossKrosBattle)) return;
   if(gameMode==="shop") playWorldBgmTrack("shop");
-  if(worldBgmHasStarted && (WORLD_BGM_MODES.has(gameMode) || gameMode==="shop")) playWorldBgmTrack("world");
+  else if(worldBgmHasStarted && WORLD_BGM_MODES.has(gameMode)) playWorldBgmTrack("world");
   if(battleModeSource==="bossKros" && ["battle","settlement","defeat"].includes(gameMode)) playBossKrosBgm();
 }
 
@@ -1007,6 +1007,8 @@ function updateWorldBgm(){
       if(audioUnlocked) playWorldBgmTrack("world");
     }
     if(gameMode==="shop"){
+      const world=ensureWorldBgmTrack("world");if(world&&!world.paused){try{world.pause();}catch(_){}}
+      worldBgmCurrentVolume=0;
       restartBgmTrackFromStart(ensureWorldBgmTrack("shop"));
       shopBgmCurrentVolume=0;
     }
@@ -1608,7 +1610,7 @@ function handleMobileTouchMove(e){
           if(mobileInput.uiAxis==="x")shopRecruitScrollX=clamp(shopRecruitScrollX-dx,0,permanentRecruitMaxScroll());
           else shopRecruitWheelDelta+=-dy;
         }else if(gameMode==="shop"&&shopTab==="weapon"&&shopSubTab==="permanent"&&mobileInput.uiStartY>=350&&mobileInput.uiStartY<=540){
-          shopWeaponScrollX=clamp(shopWeaponScrollX-(mobileInput.uiAxis==="x"?dx:dy),0,permanentWeaponMaxScroll());
+          shopWeaponScrollX=clamp(shopWeaponScrollX-dy,0,permanentWeaponMaxScroll());
         }else applyMobileSwipeDelta(dx,dy,p);
       }
       mobileInput.uiLastX=p.x;mobileInput.uiLastY=p.y;
@@ -11168,7 +11170,7 @@ function permanentRecruitMaxScroll(){
   return Math.max(0,items.length*(cardW+gap)-gap-visibleW);
 }
 function permanentRecruitMaxVerticalScroll(){ return 300; }
-function permanentWeaponMaxScroll(){const count=permanentWeaponCatalog().length;return Math.max(0,count*245-15-980);}
+function permanentWeaponMaxScroll(){const count=permanentWeaponCatalog().length;return Math.max(0,Math.ceil(count/4)*68-190);}
 const SHOP_PACKS=[
   {id:"starter",cat:1,accent:"#7cffb2",zh:"启程补给",en:"Starter Supply",descZh:"经验书×8 · 金币×8000 · 水晶×180",descEn:"EXP ×8 · Gold ×8,000 · Crystal ×180",price:"$0.99",limitZh:"永久限购1次",limitEn:"ONE-TIME"},
   {id:"tactical",cat:2,accent:"#ff8d72",zh:"战术支援",en:"Tactical Support",descZh:"武器素材×8 · 经验书×12 · 水晶×720",descEn:"Ore ×8 · EXP ×12 · Crystal ×720",price:"$9.99",limitZh:"限时限购1次",limitEn:"LIMITED · 1"},
@@ -11359,7 +11361,7 @@ function updateShop(){
       if(shopSubTab==="permanent"){
         const catalog=permanentWeaponCatalog();
         for(let n=0;n<catalog.length;n++){
-          const cx=70+n*245-shopWeaponScrollX,cy=382;
+          const col=n%4,row=Math.floor(n/4),cx=70+col*245,cy=366+row*68-shopWeaponScrollX;
           if(inRect(cx,cy,230,58)){shopWeaponSelectedId=catalog[n].id;shopMsg=language==="en"?"Weapon details selected.":"已切换武器详情。";break;}
         }
         const selected=weaponData(shopWeaponSelectedId),item=weaponInventory.find(v=>v.id===selected.id);
@@ -18611,6 +18613,7 @@ function drawStory(){
   const bg=ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,"#11172d"); bg.addColorStop(.55,"#070912"); bg.addColorStop(1,"#03040a"); ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
   ctx.fillStyle="rgba(255,255,255,.70)"; ctx.font="14px " + FONT_UI; ctx.textAlign="left"; ctx.fillText(stageCode(selectedStage)+" "+stageDisplayName(st),90,78);
   const replyOptions=currentStoryReplyOptions();
+  if(!replyOptions&&window.PZStory?.drawPortraitCast){const cast=[];for(const row of currentStory){if(Array.isArray(row)&&row[0]&&!cast.includes(row[0]))cast.push(row[0]);}window.PZStory.drawPortraitCast(ctx,W,H,line[0],cast);}
   ctx.fillStyle="rgba(0,0,0,.72)"; ctx.fillRect(65,H-190,W-130,150); ctx.strokeStyle="rgba(255,255,255,.16)"; ctx.strokeRect(65,H-190,W-130,150); ctx.fillStyle="#ffe066"; ctx.font="bold 24px " + FONT_UI; ctx.fillText(replyOptions?protagonistName():speaker,95,H-146); ctx.fillStyle="#fff"; ctx.font="22px " + FONT_UI; wrapText(replyOptions?tr("选择你的回应","Choose your response"):text,95,H-102,W-230,32);
   if(replyOptions){
     ctx.fillStyle="rgba(124,199,255,.82)"; ctx.font="bold 15px "+FONT_UI; ctx.fillText(tr("对话选择 · 最多3项","DIALOGUE CHOICE · UP TO 3"),155,178);
@@ -19809,10 +19812,9 @@ function drawShopWeaponArmory(){
   if(selected.price>0&&!ownedItem) drawBtn(language==="en"?"Purchase":"购买","◆ "+selected.price,840,292,180,42,true,"#ffe066");
 
   shopWeaponScrollX=clamp(shopWeaponScrollX,0,permanentWeaponMaxScroll());
-  ctx.save();ctx.beginPath();ctx.rect(x,366,w,94);ctx.clip();
+  ctx.save();ctx.beginPath();ctx.rect(x,358,w,190);ctx.clip();
   for(let n=0;n<catalog.length;n++){
-    const wd=catalog[n],cx=x+n*245-shopWeaponScrollX,cy=382,cw=230,ch=58,active=wd.id===shopWeaponSelectedId;
-    if(cx+cw<x||cx>x+w)continue;
+    const wd=catalog[n],col=n%4,row=Math.floor(n/4),cx=x+col*245,cy=366+row*68-shopWeaponScrollX,cw=230,ch=58,active=wd.id===shopWeaponSelectedId;
     const owned=(weaponInventory||[]).some(v=>v.id===wd.id&&v.owned);
     ctx.fillStyle=active?"rgba(124,199,255,.14)":"rgba(255,255,255,.055)";ctx.fillRect(cx,cy,cw,ch);
     ctx.strokeStyle=active?"#7cc7ff":"rgba(255,255,255,.13)";ctx.lineWidth=active?2:1;ctx.strokeRect(cx,cy,cw,ch);
@@ -19823,7 +19825,7 @@ function drawShopWeaponArmory(){
     ctx.textAlign="right";ctx.fillStyle=owned?"#7cc7ff":"#777";ctx.fillText(owned?(language==="en"?"OWNED":"已拥有"):(language==="en"?"LOCK":"未获得"),cx+cw-10,cy+50);
   }
   ctx.restore();
-  const maxScroll=permanentWeaponMaxScroll();if(maxScroll>0){const knob=Math.max(130,w*(w/(catalog.length*245-15))),kx=x+(w-knob)*(shopWeaponScrollX/maxScroll);ctx.fillStyle="rgba(255,255,255,.10)";ctx.fillRect(x,470,w,4);ctx.fillStyle="#7cc7ff";ctx.fillRect(kx,470,knob,4);ctx.fillStyle="rgba(255,255,255,.55)";ctx.font="10px "+FONT_UI;ctx.textAlign="center";ctx.fillText(language==="en"?"Swipe left / right to browse the permanent armory":"左右滑动查看常驻武器库",x+w/2,492);}
+  ctx.fillStyle="rgba(255,255,255,.5)";ctx.font="10px "+FONT_UI;ctx.textAlign="left";ctx.fillText(language==="en"?"Swipe up / down to browse the armory":"上下滑动查看完整武器库",x,558);
 }
 
 function drawShopPackArt(pack,x,y,w,h){
