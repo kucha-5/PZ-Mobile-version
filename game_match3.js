@@ -11,8 +11,8 @@
   let scorePulse=0,clearFlash=0,comboBanner=0;
   let rewards={campaign:{},endless:{},endlessDaily:{key:"",claimed:0},pending:[]},rewardPopup=false;
   let endlessRunRewardTier=0;
-  const ENDLESS_REWARDS=[{score:2500,crystals:100},{score:6000,crystals:200},{score:12000,crystals:300},{score:22000,crystals:400}];
-  const ENDLESS_DAILY_STEP=5000,ENDLESS_DAILY_CRYSTALS=50,ENDLESS_DAILY_CAP=5;
+  const ENDLESS_REWARDS=[];
+  const ENDLESS_DAILY_STEP=5000,ENDLESS_DAILY_CRYSTALS=0,ENDLESS_DAILY_CAP=0;
 
   function progressKey(){const ns=browser.getProjectZeroSaveNamespace?browser.getProjectZeroSaveNamespace():"guest";return ns+"_match3_progress";}
   function saveProgress(){try{browser.localStorage.setItem(progressKey(),JSON.stringify({stageUnlocked,rewards}));if(host&&typeof host.safeSaveGame==="function")host.safeSaveGame();}catch(e){}}
@@ -31,13 +31,7 @@
   }
   function checkRewards(){
     if(mode==="campaign"&&status==="clear"&&!rewards.campaign[stage])queueReward("c"+stage,"campaign",stage,100,host.language==="en"?"FIRST CLEAR":"首通奖励");
-    if(mode==="endless") for(let i=0;i<ENDLESS_REWARDS.length;i++){const r=ENDLESS_REWARDS[i];if(score>=r.score&&!rewards.endless[i])queueReward("e"+i,"endless",i,r.crystals,host.language==="en"?"MILESTONE":"无尽里程碑");}
-    if(mode==="endless"){
-      normalizeDailyRewards();
-      const reached=Math.floor(score/ENDLESS_DAILY_STEP);
-      while(endlessRunRewardTier<reached&&rewards.endlessDaily.claimed<ENDLESS_DAILY_CAP){endlessRunRewardTier++;rewards.endlessDaily.claimed++;grantCrystal(ENDLESS_DAILY_CRYSTALS,host.language==="en"?"ENDLESS DAILY":"无尽每日奖励");}
-      endlessRunRewardTier=Math.max(endlessRunRewardTier,reached);
-    }
+    // Endless mode is score-only. It never grants score milestones or daily currency.
   }
   function stageTarget(n){return 1800+n*500+Math.floor(n/5)*300;}
   function stageMoves(n){return Math.max(18,27-Math.floor((n-1)/3));}
@@ -178,14 +172,14 @@
     if(mode!=="endless"){g.fillStyle="rgba(255,255,255,.48)";g.font="13px "+host.FONT_UI;g.fillText((host.language==="en"?"Target ":"目标 ")+target,820,204);g.fillStyle="rgba(255,255,255,.10)";g.fillRect(820,220,220,10);g.fillStyle="#ffe066";g.fillRect(820,220,220*Math.min(1,score/target),10);}
     g.fillStyle="#ffe066";g.font="bold 15px "+host.FONT_UI;g.fillText(mode==="endless"?(host.language==="en"?"NO LIMIT":"无限步数"):(host.language==="en"?"MOVES":"剩余步数"),820,270);g.fillStyle="#fff";g.font="bold 50px Arial";g.fillText(mode==="endless"?"∞":String(moves).padStart(2,"0"),820,326);
     g.fillStyle="rgba(255,255,255,.55)";g.font="13px "+host.FONT_UI;host.wrapText(host.language==="en"?"Swipe a crystal to swap. Match 4 for a line clear, 5 for a cross, and 6 for a color burst.":"滑动水晶即可交换。4连整行消除，5连十字消除，6连触发同色爆破。",820,360,220,21);
-    g.fillStyle="rgba(255,255,255,.42)";g.font="12px "+host.FONT_UI;g.fillText((host.language==="en"?"BEST ":"最佳连消 ")+"X"+Math.max(1,bestCombo),820,425);
-    const nextGoal=mode==="campaign"?target:(ENDLESS_REWARDS.find(v=>score<v.score)?.score||((Math.floor(score/ENDLESS_DAILY_STEP)+1)*ENDLESS_DAILY_STEP));
-    g.fillStyle="#82ffe2";g.font="bold 11px "+host.FONT_UI;g.fillText((host.language==="en"?"NEXT GOAL ":"下一目标 ")+nextGoal+"  ·  "+Math.min(100,Math.floor(score/Math.max(1,nextGoal)*100))+"%",820,402);
+    g.fillStyle="rgba(255,255,255,.045)";g.fillRect(808,390,244,82);g.strokeStyle="rgba(124,199,255,.12)";g.strokeRect(808,390,244,82);
+    if(mode==="campaign"){const nextGoal=target;g.fillStyle="#82ffe2";g.font="bold 11px "+host.FONT_UI;g.fillText((host.language==="en"?"STAGE TARGET ":"关卡目标 ")+nextGoal+"  ·  "+Math.min(100,Math.floor(score/Math.max(1,nextGoal)*100))+"%",820,410);}else{g.fillStyle="#82ffe2";g.font="bold 11px "+host.FONT_UI;g.fillText(host.language==="en"?"SCORE MODE · NO REWARD":"纯分数模式 · 无分数奖励",820,410);}
+    g.fillStyle="rgba(255,255,255,.52)";g.font="12px "+host.FONT_UI;g.fillText((host.language==="en"?"BEST ":"最佳连消 ")+"X"+Math.max(1,bestCombo),820,431);
     if(comboBanner>0){g.save();g.globalAlpha=Math.min(1,comboBanner/12);g.textAlign="center";g.shadowBlur=22;g.shadowColor="#ffe066";g.fillStyle="#fff";g.font="bold "+(26+combo*3)+"px "+host.FONT_UI;g.fillText((host.language==="en"?"CHAIN ":"连续消除 ")+"×"+combo,548,62);g.restore();}
     const campaignClaimed=Object.keys(rewards.campaign||{}).length,endlessClaimed=Object.keys(rewards.endless||{}).length;
     normalizeDailyRewards();
-    g.fillStyle="rgba(124,255,178,.72)";g.font="11px "+host.FONT_UI;g.fillText(mode==="endless"?((host.language==="en"?"Daily rewards ":"每日奖励 ")+rewards.endlessDaily.claimed+"/"+ENDLESS_DAILY_CAP+" · "+(host.language==="en"?"50 per 5,000":"每5000分 +50")) : ((host.language==="en"?"First-clear rewards ":"首通奖励 ")+campaignClaimed+"/20"),820,466);
-    if(message){g.fillStyle=status==="clear"?"#7cffb2":status==="failed"?"#ff8d8d":"#ffe066";g.font="bold 17px "+host.FONT_UI;g.fillText(message,820,445);}
+    if(message){g.fillStyle=status==="clear"?"#7cffb2":status==="failed"?"#ff8d8d":"#ffe066";g.font="bold 13px "+host.FONT_UI;g.fillText(message,820,451);}
+    g.fillStyle="rgba(124,255,178,.72)";g.font="11px "+host.FONT_UI;g.fillText(mode==="endless"?(host.language==="en"?"Ranking score only":"仅记录挑战分数"):((host.language==="en"?"First-clear rewards ":"首通奖励 ")+campaignClaimed+"/20"),820,468);
     if(status==="clear"){host.drawBtn(stage>=MAX_STAGE?(host.language==="en"?"Replay Stage 1":"重新挑战"): (host.language==="en"?"Next Stage":"下一关"),"NEXT",810,492,220,48,true,"#ffe066");host.drawBtn(host.language==="en"?"Retry":"重新挑战","",810,548,220,40,true,"#fff");}
     else if(status==="failed")host.drawBtn(host.language==="en"?"Retry Stage":"重新挑战","",810,520,220,48,true,"#ffe066");
     host.drawBtn(host.language==="en"?"Back to Events":"返回活动","ESC",42,580,190,44,true,"#fff");
@@ -200,5 +194,5 @@
       host.drawBtn("×","",707,190,44,44,false,"#fff");
     }
   }
-  browser.PZMatch3={start,update,draw,pointerDown,pointerMove,pointerUp,rewardSummary:()=>({campaign:Object.keys(rewards.campaign||{}).length,endless:Object.keys(rewards.endless||{}).length,total:3000})};
+  browser.PZMatch3={start,update,draw,pointerDown,pointerMove,pointerUp,rewardSummary:()=>({campaign:Object.keys(rewards.campaign||{}).length,endless:0,total:2000})};
 })(window);

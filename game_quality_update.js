@@ -2,7 +2,7 @@
   "use strict";
 
   const tr=(zh,en)=>language==="en"?en:zh;
-  let storyAuto=false, storyReview=false, storyAutoAt=0;
+  let storyAuto=false, storyReview=false, storyAutoAt=0, storyAutoSpeed=1;
   let weaponPulse=null, matchRewardOpen=false, lockInfo=null;
   let registerStep="email", registerCode="", registerTicket="";
   const storyLog=[];
@@ -18,7 +18,7 @@
   const baseEnterStory=enterStory;
   enterStory=function(id){
     baseEnterStory(id);
-    storyLog.length=0;storyReview=false;storyAuto=false;storyAutoAt=0;
+    storyLog.length=0;storyReview=false;storyAuto=false;storyAutoAt=0;storyAutoSpeed=1;
   };
 
   const baseDrawStory=drawStory;
@@ -28,6 +28,7 @@
     // the upper-left, autoplay at the upper-right. They deliberately stay
     // clear of the speaker name and the bottom advance area.
     button(28,24,92,36,tr("对话回顾","LOG"),"#b98cff");
+    button(W-220,24,88,36,storyAutoSpeed+"×",storyAutoSpeed===3?"#ffe066":"#b98cff");
     button(W-120,24,92,36,storyAuto?tr("自动 ON","AUTO ON"):tr("自动","AUTO"),storyAuto?"#7cffb2":"#7cc7ff");
     if(storyReview){
       ctx.fillStyle="rgba(2,4,10,.94)";ctx.fillRect(42,34,W-84,H-68);
@@ -57,11 +58,16 @@
       if((clicked&&inRect(W-130,48,58,36))||justPressed("escape"))storyReview=false;
       clicked=false;return;
     }
+    if(clicked&&inRect(W-220,24,88,36)){
+      storyAutoSpeed=storyAutoSpeed>=3?1:storyAutoSpeed+1;
+      if(storyAuto)storyAutoAt=performance.now()+600/storyAutoSpeed;
+      clicked=false;return;
+    }
     if(clicked&&inRect(W-120,24,92,36)){
-      storyAuto=!storyAuto;storyAutoAt=performance.now()+1800;clicked=false;return;
+      storyAuto=!storyAuto;storyAutoAt=performance.now()+1800/storyAutoSpeed;clicked=false;return;
     }
     if(storyAuto&&performance.now()>=storyAutoAt){
-      clicked=true;storyAutoAt=performance.now()+Math.max(1400,Math.min(4200,1100+String(currentStory[storyIndex]?.[1]||"").length*55));
+      clicked=true;storyAutoAt=performance.now()+Math.max(450,Math.min(4200,1100+String(currentStory[storyIndex]?.[1]||"").length*55)/storyAutoSpeed);
     }
     baseUpdateStory();
   };
@@ -72,7 +78,7 @@
       {name:tr("通关 5 关","Clear 5 stages"),ok:s.campaign>=5,key:"m3box5",reward:100},
       {name:tr("通关 10 关","Clear 10 stages"),ok:s.campaign>=10,key:"m3box10",reward:150},
       {name:tr("通关 20 关","Clear 20 stages"),ok:s.campaign>=20,key:"m3box20",reward:300},
-      {name:tr("领取 4 个无尽里程碑","Claim 4 endless milestones"),ok:s.endless>=4,key:"m3boxend",reward:250}
+      {name:tr("完成 20 个关卡首通","Clear all 20 campaign stages"),ok:s.campaign>=20,key:"m3box20all",reward:250}
     ];
   }
   const baseDrawEvent=drawEvent;
