@@ -22057,15 +22057,18 @@ function trackCommercialScreenTransition(){
   commercialTransitionTimer=18;
 }
 
+function commercialModeAccent(mode){if(["battle","tutorialBattle","defeat"].includes(mode))return "#ff6b78";if(["operators","archive","profile","team"].includes(mode))return "#b98cff";if(["shop","warehouse","growthGuide","actionRecord"].includes(mode))return "#ffe066";if(["event","match3"].includes(mode))return "#7cffb2";return "#7cc7ff";}
+function drawGlobalUiPolish(){
+  if(["boot","loading","battle","tutorialBattle","story","prologue","projectArea"].includes(gameMode))return;
+  const accent=commercialModeAccent(gameMode);ctx.save();const vignette=ctx.createRadialGradient(W/2,H*.46,H*.30,W/2,H*.46,W*.74);vignette.addColorStop(.70,"rgba(0,0,0,0)");vignette.addColorStop(1,"rgba(0,3,10,.13)");ctx.fillStyle=vignette;ctx.fillRect(0,0,W,H);
+  const top=ctx.createLinearGradient(0,0,W,0);top.addColorStop(0,"rgba(255,255,255,0)");top.addColorStop(.28,accent);top.addColorStop(.72,accent);top.addColorStop(1,"rgba(255,255,255,0)");ctx.globalAlpha=.12;ctx.fillStyle=top;ctx.fillRect(0,0,W,1);ctx.globalAlpha=1;ctx.restore();
+}
+
 function drawCommercialScreenTransition(){
   if(commercialTransitionTimer<=0||gameMode==="loading"||gameMode==="boot")return;
   const t=clamp(commercialTransitionTimer/18,0,1);
   ctx.save();
-  ctx.fillStyle="rgba(2,4,10,"+(t*.28)+")";ctx.fillRect(0,0,W,H);
-  const lineX=W*(1-t);
-  const g=ctx.createLinearGradient(lineX-160,0,lineX+160,0);g.addColorStop(0,"rgba(124,199,255,0)");g.addColorStop(.5,"rgba(124,199,255,"+(t*.72)+")");g.addColorStop(1,"rgba(124,199,255,0)");
-  ctx.fillStyle=g;ctx.fillRect(lineX-160,0,320,2);
-  ctx.textAlign="left";ctx.fillStyle="rgba(255,255,255,"+(t*.70)+")";ctx.font="bold 11px "+FONT_UI;ctx.fillText("PROJECT ZERO  /  "+commercialModeLabel(gameMode),24,H-22);
+  ctx.fillStyle="rgba(2,4,10,"+(t*.13)+")";ctx.fillRect(0,0,W,H);
   ctx.restore();
 }
 
@@ -22103,6 +22106,7 @@ function draw(){
   else drawBattle();
 
   drawMobileControls();
+  drawGlobalUiPolish();
   drawAchievementNotice();
   if(window.PZStory && window.PZStory.active) window.PZStory.draw(ctx,W,H);
   drawCommercialScreenTransition();
