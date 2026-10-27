@@ -491,15 +491,6 @@ async function ensureDatabase(db) {
       FOREIGN KEY (owner_id) REFERENCES sf_users_v2(id) ON DELETE CASCADE
     )`,
 
-    `CREATE TABLE IF NOT EXISTS sf_guest_devices_v1 (
-      device_token_hash TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      last_seen_at INTEGER NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES sf_users_v2(id)
-        ON DELETE CASCADE
-    )`,
-
     `CREATE INDEX IF NOT EXISTS idx_pz_cw_blueprints_owner ON pz_cw_blueprints_v1(owner_id, updated_at)`,
 
     `CREATE INDEX IF NOT EXISTS idx_sf_sessions_user
@@ -1173,45 +1164,8 @@ async function completeRegistration(request, env) {
 }
 
 async function createGuestSession(request, env) {
-  const body = await readJson(request);
+  await readJson(request);
   const now = unixTime();
-
-  // A guestToken identifies the *device*, not the account. When the client
-  // sends one we've seen before, resume that same guest account instead of
-  // minting a new one - this is what stops "a new account every launch".
-  const guestToken = String(body?.guestToken || "").trim();
-  const deviceHash = guestToken ? await sha256(guestToken) : "";
-
-  if (deviceHash) {
-    const mapping = await env.DB.prepare(
-      `SELECT user_id FROM sf_guest_devices_v1 WHERE device_token_hash = ?`
-    ).bind(deviceHash).first();
-
-    if (mapping && mapping.user_id) {
-      const existing = await env.DB.prepare(
-        `SELECT id, username, email, created_at, account_type
-         FROM sf_users_v2 WHERE id = ?`
-      ).bind(mapping.user_id).first();
-
-      if (existing) {
-        await env.DB.prepare(
-          `UPDATE sf_guest_devices_v1 SET last_seen_at = ? WHERE device_token_hash = ?`
-        ).bind(now, deviceHash).run();
-
-        const tokens = await createTokenPair(env.DB, existing.id);
-        return jsonResponse({
-          success: true,
-          message: "Guest身份已恢复",
-          user: publicUser(existing),
-          ...tokens
-        }, 200);
-      }
-
-      // The mapped user no longer exists (e.g. account was deleted) - fall
-      // through and create a fresh guest, then re-point the mapping below.
-    }
-  }
-
   const userId = crypto.randomUUID();
   const guestCode = randomHex(5).toUpperCase();
   const username = `Guest_${guestCode}`;
@@ -1243,16 +1197,6 @@ async function createGuestSession(request, env) {
     now,
     now
   ).run();
-
-  if (deviceHash) {
-    await env.DB.prepare(
-      `INSERT INTO sf_guest_devices_v1 (device_token_hash, user_id, created_at, last_seen_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(device_token_hash) DO UPDATE SET
-         user_id = excluded.user_id,
-         last_seen_at = excluded.last_seen_at`
-    ).bind(deviceHash, userId, now, now).run();
-  }
 
   const tokens = await createTokenPair(env.DB, userId);
   return jsonResponse({
